@@ -37,6 +37,8 @@ DEFAULTS = {
     "max_workers": 1,             # 8GB RAM -> one active worker (research finding)
     "restart_cap": 2,              # watchdog restart cap before escalation (F7)
     "loop_hash_k": 4,              # watchdog: K identical heartbeat hashes = loop (F7)
+    "lease_ttl_seconds": 1800,     # F8: a worker whose lease is older than this AND whose
+                                   #     PID is dead -> its task returns to ready (30 min)
     "gate_card_cap": 5,            # max gate cards approved in one batch (F9)
     "secret_denylist_extra": [],   # extra env var patterns to strip (F1 base is built-in)
     "mcp_allowlist": [],           # worker MCP servers (default: none) (F1)

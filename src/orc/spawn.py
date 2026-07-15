@@ -92,6 +92,50 @@ def window_tty(window_id):
     return tty or None
 
 
+def pids_on_tty(tty):
+    """Return the PIDs of processes attached to a tty (newest last). [] on failure."""
+    if not tty or not tty.startswith("/dev/"):
+        return []
+    ttyname = tty[len("/dev/"):]
+    out = subprocess.run(["ps", "-t", ttyname, "-o", "pid="],
+                         capture_output=True, text=True)
+    return [int(p) for p in out.stdout.split() if p.strip().isdigit()]
+
+
+def pid_on_window(window_id, retries=10, delay=0.3):
+    """Robustly capture the worker's PID via the spawned window's tty (F8 fix).
+
+    The eval found `pid` could be None because worker_pids() matches process cwd via lsof
+    immediately after spawn, before the interactive shell has `cd`'d -- a race. Resolving
+    the window's tty and reading the process ON that tty is race-free and reliable: the tty
+    exists the moment the window opens. We retry briefly because the shell/claude process
+    may take a fraction of a second to attach. Returns an int PID or None.
+
+    Prefers a `claude` process on the tty; falls back to the newest non-shell PID (the
+    verification seam runs a plain shell command, which is still a real, killable worker).
+    """
+    import time as _t
+    for _ in range(max(1, retries)):
+        tty = window_tty(window_id)
+        pids = pids_on_tty(tty)
+        if pids:
+            # prefer a claude process; else the highest PID (the child of the login shell)
+            claude_pid = _first_claude_pid(pids)
+            return claude_pid if claude_pid is not None else max(pids)
+        _t.sleep(delay)
+    return None
+
+
+def _first_claude_pid(pids):
+    """Return the first PID whose command is claude, or None."""
+    for pid in pids:
+        out = subprocess.run(["ps", "-p", str(pid), "-o", "comm="],
+                             capture_output=True, text=True)
+        if "claude" in (out.stdout or "").lower():
+            return pid
+    return None
+
+
 def _kill_tty_processes(tty):
     """Terminate the processes running on a tty (the finished worker). Returns count killed.
 

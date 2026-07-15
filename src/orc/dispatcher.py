@@ -7,6 +7,7 @@ features share one code path.
 """
 import os
 import re
+import time
 
 from . import beads
 from . import shift as shiftmod
@@ -402,33 +403,66 @@ def record_revalidate_note(project, slug, note):
         return None
 
 
-def reconcile(state, hub):
-    """Arbiter for shift.json vs bd vs live PIDs (design.md).
+def reconcile(state, hub, cfg=None, now=None):
+    """Arbiter for shift.json vs bd vs live PIDs (design.md + F8 recovery).
 
-    bd is the truth about TASKS; shift.json is the truth about PROCESSES. On restart or
-    drift: drop workers whose PID is no longer alive (their task returns to ready via
-    lease); keep workers that are still alive. Returns (state, dropped_task_ids).
+    bd is the truth about TASKS; shift.json is the truth about PROCESSES. On a dispatcher
+    restart (e.g. after kill -9) or drift:
+      - a worker whose PID is still ALIVE is kept (adopted) -- no duplicate spawn;
+      - a worker whose PID is DEAD (or absent) has its task returned to ready via a LEASE
+        so it is re-served, unless bd already closed it.
+
+    Lease safety (F8): a worker registered so recently that it is still within its lease
+    TTL and whose PID we simply failed to read (a transient ps/lsof miss right after spawn)
+    is NOT dropped -- we re-resolve the PID from its window tty first. Only a genuinely
+    dead worker returns its task to ready. Idempotent: running it twice yields the same
+    result (0 duplicates / 0 losses). Returns (state, dropped_task_ids).
     """
+    cfg = cfg or {}
+    now = time.time() if now is None else now
+    lease_ttl = cfg.get("lease_ttl_seconds", 1800)
     alive = []
     dropped = []
     for w in state.get("workers", []):
         pid = w.get("pid")
         if pid and _pid_alive(pid):
             alive.append(w)
-        else:
-            # dead/unknown worker: verify by cwd match too before dropping
-            live_pids = spawn.worker_pids(w.get("project", "")) if w.get("project") else []
-            if live_pids:
-                w["pid"] = live_pids[0]
-                alive.append(w)
-            else:
-                dropped.append(w.get("task"))
-                # return the task to ready (lease) unless bd already closed it
-                task = beads.show(hub, w.get("task")) if w.get("task") else None
-                if task and task.get("status") not in ("closed", "done"):
-                    beads.reopen(hub, w.get("task"))
+            continue
+        # PID missing/dead: try to re-resolve it (race-free) before giving up. A worker
+        # still inside its lease may just have had its PID unread at spawn time.
+        repid = _reresolve_pid(w, now, lease_ttl)
+        if repid is not None:
+            w["pid"] = repid
+            alive.append(w)
+            continue
+        # genuinely dead: return the task to ready (lease) unless bd already closed it.
+        dropped.append(w.get("task"))
+        task = beads.show(hub, w.get("task")) if w.get("task") else None
+        if task and task.get("status") not in ("closed", "done"):
+            beads.reopen(hub, w.get("task"))
     state["workers"] = alive
     return state, dropped
+
+
+def _reresolve_pid(worker, now, lease_ttl):
+    """Best-effort re-resolve a worker's live PID from its window tty / project cwd (F8).
+
+    Returns a live PID or None. Prefers the window tty (race-free); falls back to cwd
+    matching. Only consults the tty when the worker is still within its lease TTL (an old
+    worker with a dead PID is really dead)."""
+    started = worker.get("started_epoch")
+    within_lease = (started is not None) and ((now - float(started)) <= lease_ttl)
+    if within_lease and worker.get("tab_id"):
+        pid = spawn.pid_on_window(worker.get("tab_id"), retries=1, delay=0)
+        if pid and _pid_alive(pid):
+            return pid
+    project = worker.get("project", "")
+    if project:
+        live = spawn.worker_pids(project)
+        for p in live:
+            if _pid_alive(p):
+                return p
+    return None
 
 
 def _pid_alive(pid):
@@ -523,10 +557,15 @@ def spawn_one(cfg, hub, state, task):
 
     # register worker. `detail` is the Terminal window id (spawn_terminal); we store it as
     # tab_id so the dispatcher can close the worker's window on completion and so status no
-    # longer prints a bare `None` (consumer finding). The PID is discovered best-effort.
+    # longer prints a bare `None` (consumer finding).
     tab_id = detail
-    pids = spawn.worker_pids(project)
-    pid = pids[0] if pids else None
+    # Robust PID capture (F8 fix for the eval's `pid None`): resolve the window's tty and
+    # read the process ON it (race-free), rather than relying on lsof cwd-matching right
+    # after spawn (which loses to the shell's `cd`). Fall back to cwd-matching if needed.
+    pid = spawn.pid_on_window(tab_id)
+    if pid is None:
+        pids = spawn.worker_pids(project)
+        pid = pids[0] if pids else None
     shiftmod.add_worker(state, pid=pid, session=task_id, project=project,
                         task=task_id, phase="build", tokens_before=tokens_before,
                         tab_id=tab_id)

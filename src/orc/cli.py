@@ -132,7 +132,7 @@ def cmd_start(args):
     state = shiftmod.load()
     # reconcile shift.json against live PIDs + bd (F4 arbiter): drop dead workers,
     # their tasks return to ready via lease before we compute what to spawn.
-    state, dropped = dispatcher.reconcile(state, hub)
+    state, dropped = dispatcher.reconcile(state, hub, cfg=cfg)
     for tid in dropped:
         print("reconcile: dropped dead worker for %s (task returned to ready)" % tid)
     window = probes.ccusage_window()

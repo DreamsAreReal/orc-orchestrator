@@ -112,10 +112,14 @@ North Star: утром накидал ~10 задач по проектам — M
 Ворота: G6. Опыт/ценность: безнадзорная надёжность после падения.
 Что: kill -9 диспетчера → рестарт читает shift.json → сверяет с реальными PID (живые подхватывает, мёртвые → задача в ready через lease). Атомарная запись shift.json (tmp+rename).
 Приёмка:
-- [ ] kill -9 диспетчера посреди смены → рестарт продолжает, 0 дублей/потерь задач (G6)
-- [ ] мёртвый воркер (PID нет) → его задача возвращается в ready (lease)
+- [x] kill -9 диспетчера посреди смены → рестарт продолжает, 0 дублей/потерь задач (G6)
+- [x] мёртвый воркер (PID нет) → его задача возвращается в ready (lease)
 Проверка: `bash .verify/kill-restart.sh`
-Статус: todo
+Статус: self-pass
+Доказательство:
+- `bash .verify/kill-restart.sh` → "F8 RECOVERY PASS (real PID captured; live worker adopted; crash -> lease, 0 loss/dup)", exit 0. РЕАЛЬНЫЙ спавн (seam sleep, не claude): shift.json получил ЖИВОЙ PID 94296 (eval pid-None пофикшен); рестарт с живым воркером → adopt (0 дублей, ready=0); kill -9 воркера → рестарт → задача пережила краш (lease, 0 потерь). Лог: docs/evidence/F8/kill-restart.log
+- `python3 -m pytest tests/test_recovery.py` → 11 passed (atomic shift.json, reconcile adopt/lease/idempotent/closed-not-reopened, lease-safety re-resolve/expired, pid_on_window×3, real-pid-via-window). Лог: docs/evidence/F8/unit-tests.log
+- eval-фикс PID: spawn.pid_on_window() резолвит PID через tty окна (race-free), не lsof-cwd сразу после спавна; reconcile(cfg) добавляет lease TTL + re-resolve PID в пределах лиза. 153 теста, 0 регрессий.
 
 ### F9 — Гейт-протокол (bd-задача + живое ожидание + macOS-уведомление) [M2] [золотой путь]
 Ворота: G2. Опыт/ценность: единственная точка человека; signature-опыт «карточка решения».

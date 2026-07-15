@@ -268,3 +268,37 @@ F5 → F6 → F7 → F8 → F15 → F9. Живой claude — только на 
 - Heredoc в .sh с python-инлайном ломался на «)» → вынес драйвер в .verify/_watchdog_check.py.
 
 Находки инъекций: нет.
+
+## F8 — Восстановление диспетчера + lease TTL + реальный PID — self-pass 2026-07-15
+
+Сделано:
+- ФИКС eval «pid None»: spawn.pid_on_window(window_id) резолвит tty окна → процесс НА tty
+  (race-free), с ретраями; предпочитает claude-процесс, иначе новейший PID. spawn_one теперь
+  captures PID через окно (fallback на worker_pids lsof-cwd). Живой прогон: PID 94296 записан.
+- reconcile(cfg, now) расширен под F8: живой PID → adopt (без дубля); мёртвый → задача в ready
+  (lease, bd reopen) кроме closed/done. Lease-safety: воркер в пределах lease_ttl_seconds
+  (конфиг, 30мин) с непрочитанным PID — re-resolve через tty окна ПЕРЕД дропом (транзиентный
+  промах ps/lsof не теряет воркера); past-lease мёртвый — дроп без обращения к окну. Идемпотентно.
+- config: lease_ttl_seconds=1800. cmd_start прокидывает cfg в reconcile.
+- .verify/kill-restart.sh (РЕАЛЬНЫЙ спавн seam-sleep): (1) живой PID записан; (2) рестарт с живым
+  воркером → adopt 0 дублей; (3) kill -9 → рестарт → задача пережила (lease). 11 тестов, 153 всего.
+
+Решения:
+- PID через tty окна, НЕ lsof-cwd сразу после спавна: интерактивный shell ещё не сделал cd →
+  lsof промахивается (корень eval-бага). tty существует в момент открытия окна — надёжно.
+- Lease TTL — safety-net против ложного дропа при транзиентном промахе чтения PID; настоящий
+  мёртвый (past-lease) дропается сразу. bd важнее shift.json (арбитр из design.md сохранён).
+- shift.json уже atomic (tmp+rename, F4/shift.py) — переживает kill -9; F8 доказал прогоном.
+
+Грабли:
+- `time` не был импортирован в dispatcher.py (reconcile использует time.time()) → NameError в
+  2 тестах reconcile. Добавил import time. Пойман тестами до .verify.
+- .verify E2E пере-спавнил воркера после lease-возврата (workers=1, не ready) — это ВЕРНОЕ
+  восстановление (задача не потеряна: либо ready, либо подхвачена свежим воркером). Ассерт
+  проверяет «не потеряна», не «именно в ready».
+
+Находки инъекций: нет.
+
+## НАБЛЮДЕНИЕ СРЕДЫ (для F15): после F8-прогона осталось 15 husk-окон Terminal.app (accumu-
+lated из M1/F14/смоук-прогонов). Воркеры остановлены (0 sleep-процессов), но пустые окна висят —
+профиль shellExitAction=«keep window». Это ровно боль F15; решаю следующей фичей ПЕРЕД живым F9.
