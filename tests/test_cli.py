@@ -56,6 +56,27 @@ def test_add_single_json(env, tmp_path):
     assert d["project"] == proj and d["id"]
 
 
+def test_add_offline_sets_meta(env, tmp_path):
+    # P2: `orc add --offline` records offline=True in the task meta so the dispatcher can
+    # cut this worker's network (deny) at spawn time.
+    e, home = env
+    proj = _mkproj(tmp_path, "p1")
+    r = _run(e, "add", proj, "local-only refactor", "--offline", "--json")
+    assert r.returncode == 0
+    tid = json.loads(r.stdout)["id"]
+    task = beads.show(home, tid)
+    assert beads.task_meta(task).get("offline") is True
+
+
+def test_add_without_offline_has_no_offline_meta(env, tmp_path):
+    e, home = env
+    proj = _mkproj(tmp_path, "p1")
+    r = _run(e, "add", proj, "normal networked task", "--json")
+    tid = json.loads(r.stdout)["id"]
+    task = beads.show(home, tid)
+    assert beads.task_meta(task).get("offline") is None
+
+
 def test_add_batch_creates_all(env, tmp_path):
     e, home = env
     p1 = _mkproj(tmp_path, "p1")

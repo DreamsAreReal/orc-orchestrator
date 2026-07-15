@@ -59,9 +59,21 @@ DEFAULTS = {
     # workspace -- obfuscated escapes (base64|bash rm, python rmtree, find -delete) are
     # blocked at the syscall level. Default ON (.spikes/probe/sandbox.md proves the walls).
     "sandbox": True,
-    # Fully block outbound network for the worker (per-host allowlisting is unreliable in
-    # user seatbelt -- see the spike). Default OFF: workers need the claude API / git fetch /
-    # brew; git push stays blocked by the F1 hook. Turn on for locked-down runs.
+    # Network policy for workers -- a convenient, coarse choice (per-host allowlisting is
+    # unreliable in user seatbelt, so orc offers OPEN vs DENY, not a host allowlist):
+    #   "open" (default): the worker's network is open. claude works normally (it needs the
+    #           API); dependency installs / git fetch / brew all work. Threat-model cost: a
+    #           worker COULD in theory exfiltrate over the open network (git push is still
+    #           blocked -- F1 hook + env credential strip -- but a raw curl/nc is not). Use
+    #           for the normal case where the task needs the network.
+    #   "deny": the worker's network is CUT (seatbelt `(deny network*)`). Maximum isolation:
+    #           no exfiltration channel at all. The worker CANNOT download dependencies or
+    #           reach any API besides the local claude session it is already in -- suitable
+    #           for fully-local tasks (offline refactors, local codegen/tests) where no
+    #           network is needed. A per-task `orc add --offline` sets deny for one task.
+    "network_policy": "open",
+    # DEPRECATED alias kept for back-compat: sandbox_deny_network=true is equivalent to
+    # network_policy="deny". network_deny() honours either. Prefer network_policy.
     "sandbox_deny_network": False,
     # P5: fail-CLOSED on the sandbox. The seatbelt sandbox is the PRIMARY wall; if it would
     # NOT be applied (sandbox-exec unavailable, or sandbox=false) orc REFUSES to spawn an
@@ -128,6 +140,27 @@ def ensure_home():
     os.makedirs(home, exist_ok=True)
     os.makedirs(heartbeat_dir(), exist_ok=True)
     return home
+
+
+def network_deny(cfg, task_offline=False):
+    """Resolve whether the worker's outbound network should be DENIED (cut).
+
+    Convenient, coarse policy (open vs deny; no per-host allowlist -- unreliable in user
+    seatbelt). Returns True if the worker must run with the network cut:
+      - a per-task `orc add --offline` (task_offline=True) forces deny for THAT task only;
+      - config network_policy == "deny" cuts the network for every worker of the shift;
+      - the deprecated sandbox_deny_network=true is honoured as an alias of "deny".
+    Otherwise the network is open (default). A per-task offline flag can only TIGHTEN the
+    policy (deny), never loosen a shift-wide deny back to open.
+    """
+    cfg = cfg or {}
+    if task_offline:
+        return True
+    if str(cfg.get("network_policy", "open")).lower() == "deny":
+        return True
+    if cfg.get("sandbox_deny_network"):        # deprecated alias
+        return True
+    return False
 
 
 def write_default_config():

@@ -44,7 +44,7 @@ def _session_marker(session):
     return "ORC_SESSION=%s" % session
 
 
-def build_inner_command(project, claude_bin, prompt, session, cfg=None):
+def build_inner_command(project, claude_bin, prompt, session, cfg=None, deny_network=None):
     """The shell program Ghostty runs via `-e bash -lc '<this>'`.
 
     Exports ORC_SESSION (heartbeat hooks + the find/kill handle), cd's into the project,
@@ -71,17 +71,18 @@ def build_inner_command(project, claude_bin, prompt, session, cfg=None):
         prompt_file = _spawn._write_prompt_file(project, session, prompt)
         inner = '%scd %s && exec %s "$(cat %s)"' % (
             export, shlex.quote(project), shlex.quote(claude_bin), shlex.quote(prompt_file))
-    return _spawn._maybe_sandbox(cfg, project, inner)
+    return _spawn._maybe_sandbox(cfg, project, inner, deny_network=deny_network)
 
 
-def spawn_ghostty(project, claude_bin, prompt, session, cfg=None):
+def spawn_ghostty(project, claude_bin, prompt, session, cfg=None, deny_network=None):
     """Open a Ghostty window running the worker. Returns (ok, detail).
 
     On success `detail` is the session marker (the stable handle used to stop the worker
     and, by exiting, close its window). Unlike Terminal there is no window id -- the marker
     is the identifier stored in shift.json as tab_id so close_ghostty can find it.
     """
-    inner = build_inner_command(project, claude_bin, prompt, session, cfg=cfg)
+    inner = build_inner_command(project, claude_bin, prompt, session, cfg=cfg,
+                                deny_network=deny_network)
     # open -na launches a NEW Ghostty instance/window with the -e command.
     argv = ["open", "-na", GHOSTTY_APP, "--args", "-e",
             "bash", "-lc", inner]

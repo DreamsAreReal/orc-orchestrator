@@ -159,7 +159,8 @@ def test_mutex_refuses_second_same_project(tmp_path, monkeypatch):
                         lambda: {"active": True, "remaining_minutes": 200})
     # F15: spawn_one routes through the backend selector
     monkeypatch.setattr(dispatcher.spawn, "spawn_worker",
-                        lambda cfg, p, c, prompt, session=None: (spawned.append(p) or (True, "tab 1")))
+                        lambda cfg, p, c, prompt, session=None, deny_network=None:
+                        (spawned.append(p) or (True, "tab 1")))
     monkeypatch.setattr(dispatcher.spawn, "worker_pid",
                         lambda cfg, p, session, handle=None: 99999)
 
@@ -187,7 +188,8 @@ def _spawn_gate_stubs(monkeypatch, spawned, claimed):
     monkeypatch.setattr(dispatcher.probes, "ccusage_window",
                         lambda: {"active": True, "remaining_minutes": 200})
     monkeypatch.setattr(dispatcher.spawn, "spawn_worker",
-                        lambda cfg, p, c, prompt, session=None: (spawned.append(p) or (True, "t")))
+                        lambda cfg, p, c, prompt, session=None, deny_network=None:
+                        (spawned.append(p) or (True, "t")))
     monkeypatch.setattr(dispatcher.spawn, "worker_pid",
                         lambda cfg, p, session, handle=None: 12345)
 

@@ -142,6 +142,46 @@ def test_sandbox_default_on_in_config():
 
 
 # --------------------------------------------------------------------------- #
+# P2: network policy reaches the profile written for a spawn
+# --------------------------------------------------------------------------- #
+def _profile_of_start_command(cmd, proj):
+    # the sandbox-exec wrapper points at <proj>/.orc/sandbox.sb -- read it back
+    prof_path = os.path.join(os.path.realpath(proj), ".orc", "sandbox.sb")
+    with open(prof_path) as f:
+        return f.read()
+
+
+def test_start_command_open_policy_leaves_network_open(tmp_path, monkeypatch):
+    proj = str(tmp_path / "proj")
+    os.makedirs(proj)
+    monkeypatch.setattr(sandbox, "sandbox_available", lambda: True)
+    cmd = spawn.build_start_command(proj, "/bin/claude", "x", session="t1",
+                                    cfg={"network_policy": "open"})
+    assert cmd.startswith("/usr/bin/sandbox-exec")
+    assert "(deny network*)" not in _profile_of_start_command(cmd, proj)
+
+
+def test_start_command_deny_policy_cuts_network(tmp_path, monkeypatch):
+    proj = str(tmp_path / "proj")
+    os.makedirs(proj)
+    monkeypatch.setattr(sandbox, "sandbox_available", lambda: True)
+    cmd = spawn.build_start_command(proj, "/bin/claude", "x", session="t1",
+                                    cfg={"network_policy": "deny"})
+    assert "(deny network*)" in _profile_of_start_command(cmd, proj)
+
+
+def test_start_command_per_task_offline_override_cuts_network(tmp_path, monkeypatch):
+    # deny_network=True (what the dispatcher passes for `orc add --offline`) overrides an
+    # open shift policy for this one spawn.
+    proj = str(tmp_path / "proj")
+    os.makedirs(proj)
+    monkeypatch.setattr(sandbox, "sandbox_available", lambda: True)
+    cmd = spawn.build_start_command(proj, "/bin/claude", "x", session="t1",
+                                    cfg={"network_policy": "open"}, deny_network=True)
+    assert "(deny network*)" in _profile_of_start_command(cmd, proj)
+
+
+# --------------------------------------------------------------------------- #
 # Claude runtime scratch (F12 fix): the Bash tool needs ~/.claude/session-env etc.,
 # but the worker's OWN enforcement (skills/agents/settings.json) stays non-writable.
 # --------------------------------------------------------------------------- #

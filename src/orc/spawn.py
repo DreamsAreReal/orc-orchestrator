@@ -38,16 +38,22 @@ def _backend(cfg):
     return "terminal"
 
 
-def spawn_worker(cfg, project, claude_bin, prompt, session):
+def spawn_worker(cfg, project, claude_bin, prompt, session, deny_network=None):
     """Spawn a worker in the configured terminal backend. Returns (ok, handle).
 
     `handle` is stored in shift.json as tab_id: a Terminal window id, or (Ghostty) the
     session marker used to find/stop the worker. close_worker understands both.
+
+    `deny_network` (bool | None): explicit per-spawn override of the network policy. None
+    resolves from config (config.network_deny). A per-task `orc add --offline` passes True
+    here to cut the network for a single task.
     """
     if _backend(cfg) == "ghostty":
         from . import spawn_ghostty
-        return spawn_ghostty.spawn_ghostty(project, claude_bin, prompt, session, cfg=cfg)
-    return spawn_terminal(project, claude_bin, prompt, session=session, cfg=cfg)
+        return spawn_ghostty.spawn_ghostty(project, claude_bin, prompt, session, cfg=cfg,
+                                           deny_network=deny_network)
+    return spawn_terminal(project, claude_bin, prompt, session=session, cfg=cfg,
+                          deny_network=deny_network)
 
 
 def close_worker(cfg, handle, session=None):
@@ -78,7 +84,8 @@ def worker_pid(cfg, project, session, handle=None):
     return pids[0] if pids else None
 
 
-def build_start_command(project, claude_bin, prompt, session=None, cfg=None):
+def build_start_command(project, claude_bin, prompt, session=None, cfg=None,
+                        deny_network=None):
     """The shell line executed inside the new terminal tab.
 
     Normally: cd into the project, then launch interactive claude with the start prompt.
@@ -139,7 +146,7 @@ def build_start_command(project, claude_bin, prompt, session=None, cfg=None):
             shlex.quote(claude_bin),
             shlex.quote(prompt_file),
         )
-    return _maybe_sandbox(cfg, project, inner)
+    return _maybe_sandbox(cfg, project, inner, deny_network=deny_network)
 
 
 def _prompt_file_path(project, session):
@@ -164,27 +171,33 @@ def _write_prompt_file(project, session, prompt):
     return path
 
 
-def _maybe_sandbox(cfg, project, inner):
+def _maybe_sandbox(cfg, project, inner, deny_network=None):
     """Wrap `inner` under sandbox-exec if the config enables the OS-sandbox (F13).
 
     Default on. Skipped only if explicitly disabled in config or seatbelt is unavailable.
     The profile is written into <workspace>/.orc/sandbox.sb (inside the sole writable
     subpath) so the sandboxed worker can be launched with a profile it may also read.
+
+    `deny_network` (bool | None): explicit override. None resolves the network policy from
+    config (config.network_deny: network_policy open/deny + the deprecated alias). A per-task
+    `orc add --offline` passes True to cut the network for a single task.
     """
     cfg = cfg or {}
     if not cfg.get("sandbox", True):
         return inner
     if not sandboxmod.sandbox_available():
         return inner
+    if deny_network is None:
+        from . import config as configmod
+        deny_network = configmod.network_deny(cfg)
     try:
-        profile = sandboxmod.write_profile(
-            project, deny_network=cfg.get("sandbox_deny_network", False))
+        profile = sandboxmod.write_profile(project, deny_network=deny_network)
     except OSError:
         return inner
     return sandboxmod.wrap_command(profile, inner)
 
 
-def spawn_terminal(project, claude_bin, prompt, session=None, cfg=None):
+def spawn_terminal(project, claude_bin, prompt, session=None, cfg=None, deny_network=None):
     """Open a new Terminal window, cd into project, run interactive claude.
 
     Returns (ok, detail). On success `detail` is the numeric Terminal WINDOW ID of the
@@ -196,7 +209,8 @@ def spawn_terminal(project, claude_bin, prompt, session=None, cfg=None):
     This spawns an interactive session; the PID is discovered out-of-band (F4) by matching
     claude processes with this project cwd (RAM is the mutex; there is one worker).
     """
-    cmd = build_start_command(project, claude_bin, prompt, session=session, cfg=cfg)
+    cmd = build_start_command(project, claude_bin, prompt, session=session, cfg=cfg,
+                              deny_network=deny_network)
     # AppleScript string escaping: wrap the shell command as a do-script argument.
     esc = cmd.replace("\\", "\\\\").replace('"', '\\"')
     # `close tab` is not understood by Terminal.app; only `close (window id N)` works, and

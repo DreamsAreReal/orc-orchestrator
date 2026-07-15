@@ -109,20 +109,44 @@ stop and what they do **not**.
 **Still open (be honest):**
 
 - **A worker CAN READ files outside the project.** The seatbelt confines *writes*, not
-  reads (except `~/.ssh`). A worker can read any file your user can read.
-- **The network is open.** Workers need it to reach the Claude API and fetch from git, so
-  outbound network is allowed. Combined with the read gap above, this means **theoretical
-  exfiltration of your project's (or your machine's) file contents is possible** — an
-  agent under bypass could read a file and send it somewhere.
+  reads (except `~/.ssh`). A worker can read any file your user can read. (One read is
+  *intentional*: a pipeline worker reads the pipeline skill tree at `~/.claude/skills/**`
+  — `SKILL.md`, `references/`, `templates/`, `agents/` — read-only, so it can run the full
+  conveyor. That tree stays **un-writable**: a worker cannot edit its own conveyor.)
+- **The network policy is your choice — open (default) or deny.** See below.
+
+### Network policy: `open` vs `deny` (and per-task `--offline`)
+
+The seatbelt cannot do a reliable per-host allowlist in a user session, so orc gives you a
+convenient coarse choice instead of a fragile allowlist:
+
+- **`network_policy: "open"` (default).** The worker's outbound network is open. Claude
+  works normally (it needs the API), dependency installs / `git fetch` / brew all work.
+  Threat-model cost: an agent under bypass with read access **could in theory exfiltrate**
+  file contents over the open network (a raw `curl`/`nc` is not blocked; `git push` still
+  is). Use this for the normal case where the task needs the network.
+- **`network_policy: "deny"`.** The worker's network is **cut** at the syscall level
+  (seatbelt `(deny network*)`). Maximum isolation: **no exfiltration channel at all.** The
+  trade-off: the worker cannot download dependencies or reach any API besides the local
+  Claude session it is already in — so use it only for **fully-local tasks** (offline
+  refactors, local codegen/tests) that need no network. Set it in `~/.orc/config.json`.
+- **Per-task `orc add <project> "<task>" --offline`.** Cuts the network for **one task**
+  regardless of the shift-wide policy — handy when most tasks need the net but one is a
+  local-only job you want fully isolated. A per-task `--offline` can only *tighten* to deny,
+  never loosen a shift-wide `deny` back to open.
+
+Proven at the OS level (`docs/evidence/p2/network-policy/spike.sh`): under `deny` a network
+syscall returns `EPERM` (blocked by seatbelt); under `open` it reaches the network stack.
+
 - **The sandbox is mandatory.** It is the primary wall. `allow_no_sandbox=true` removes it
   (no write wall, no `~/.ssh` read wall) — a loud `[WARN]` in the canary and a banner in
   the newspaper fire on every shift start when it is set. Do not run unattended with the
   sandbox off.
 
 **Bottom line:** run tasks and projects **you trust**. The strong walls (write, delete,
-`~/.ssh` read, push, secret env, reward-hack) are real and hold under obfuscation. But an
-autonomous agent with read access and a network is a real exfiltration surface — treat
-sensitive projects with caution, and keep the sandbox on.
+`~/.ssh` read, push, secret env, reward-hack) are real and hold under obfuscation. If a task
+is fully local, `deny` / `--offline` removes the exfiltration surface entirely; otherwise
+the network is open, so treat sensitive projects with caution and keep the sandbox on.
 
 ## Verification
 

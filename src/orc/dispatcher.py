@@ -16,6 +16,7 @@ from . import worker_walls
 from . import probes
 from . import gitutil
 from . import admission
+from . import config
 from . import strings as S
 
 
@@ -656,7 +657,12 @@ def spawn_one(cfg, hub, state, task):
     # via ORC_SESSION, so the watchdog reads the same session the dispatcher spawned.
     # spawn_worker routes to the configured backend (F15): Ghostty (default, clean close)
     # or Terminal.app. `detail` is the backend handle stored as tab_id.
-    ok, detail = spawn.spawn_worker(cfg, project, cfg["claude_bin"], prompt, session=task_id)
+    # Per-task network policy: `orc add --offline` sets meta["offline"] to cut this worker's
+    # network (deny) regardless of the shift-wide policy (config.network_deny resolves the
+    # rest). A per-task offline flag can only TIGHTEN to deny, never loosen a shift-wide deny.
+    deny_network = config.network_deny(cfg, task_offline=bool(meta.get("offline")))
+    ok, detail = spawn.spawn_worker(cfg, project, cfg["claude_bin"], prompt,
+                                    session=task_id, deny_network=deny_network)
     if not ok:
         beads.set_status(hub, task_id, "open")
         shiftmod.mark_failed(state, task_id, "spawn failed: %s" % detail)

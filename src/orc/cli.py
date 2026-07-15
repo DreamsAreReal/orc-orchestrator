@@ -44,13 +44,18 @@ def cmd_init(args):
     return 0
 
 
-def _add_one(hub, project, text, priority, gate=False, gate_card=None):
+def _add_one(hub, project, text, priority, gate=False, gate_card=None, offline=False):
     project = os.path.abspath(os.path.expanduser(project))
     if not text or not text.strip():
         raise ValueError(S.ERR_NO_TASK_TEXT)
     slug = _slugify(text, fallback="task")
     labels = ["orc"] + (["gate"] if gate else [])
     meta = {"project": project, "slug": slug, "text": text.strip()}
+    # per-task network policy: --offline cuts THIS worker's network (deny) regardless of the
+    # shift-wide network_policy. Recorded in the task meta so the dispatcher can pass it to the
+    # sandbox at spawn time. Suitable for fully-local tasks (no dependency download / API).
+    if offline:
+        meta["offline"] = True
     # capture the product-layer rev at add time so the dispatcher can re-validate the
     # plan against later docs/ changes (R5). None if the project is not a git repo yet.
     prod_rev = gitutil.product_layer_rev(project) if gitutil.is_repo(project) else None
@@ -88,7 +93,8 @@ def cmd_add(args):
                 print(S.ERR_PROJECT_MISSING.format(project=proj), file=sys.stderr)
                 continue
             try:
-                issue_id, p = _add_one(hub, proj, text.strip(), args.priority)
+                issue_id, p = _add_one(hub, proj, text.strip(), args.priority,
+                                       offline=getattr(args, "offline", False))
                 created.append({"id": issue_id, "project": p})
             except ValueError as e:
                 print(str(e), file=sys.stderr)
@@ -113,7 +119,8 @@ def cmd_add(args):
         }
     try:
         issue_id, p = _add_one(hub, args.project, args.text, args.priority,
-                               gate=args.gate, gate_card=gate_card)
+                               gate=args.gate, gate_card=gate_card,
+                               offline=getattr(args, "offline", False))
     except ValueError as e:
         print(str(e), file=sys.stderr)
         return 1
@@ -531,6 +538,9 @@ def build_parser():
     pa.add_argument("--cost", help="gate card: the cost of getting this decision wrong")
     pa.add_argument("--irreversible", action="store_true",
                     help="gate card: this decision is irreversible (never batch-approved)")
+    pa.add_argument("--offline", action="store_true",
+                    help="cut this task's network (deny) -- for fully-local tasks that need "
+                         "no dependency download / API; overrides the shift network policy")
     pa.add_argument("--batch", action="store_true", help="read 'project: text' lines from stdin")
     pa.add_argument("--json", action="store_true")
     pa.set_defaults(func=cmd_add)

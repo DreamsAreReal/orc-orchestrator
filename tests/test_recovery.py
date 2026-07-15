@@ -170,7 +170,7 @@ def test_spawn_one_records_real_pid_via_window(tmp_path, monkeypatch):
                         lambda: {"active": True, "remaining_minutes": 200})
     # F15: spawn_one routes through the backend selector; worker_pid resolves a real PID
     monkeypatch.setattr(dispatcher.spawn, "spawn_worker",
-                        lambda cfg, p, c, prompt, session=None: (True, "77"))
+                        lambda cfg, p, c, prompt, session=None, deny_network=None: (True, "77"))
     monkeypatch.setattr(dispatcher.spawn, "worker_pid",
                         lambda cfg, p, session, handle=None: 45678)
     task = {"id": "tp", "metadata": {"project": repo, "slug": "tp", "text": "x"}}

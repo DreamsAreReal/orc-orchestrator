@@ -45,6 +45,38 @@ def test_config_json_overrides_defaults(tmp_path, monkeypatch):
     assert cfg["min_window_minutes"] == config.DEFAULTS["min_window_minutes"]
 
 
+# --------------------------------------------------------------------------- #
+# P2: network policy -- a convenient open/deny choice + per-task --offline
+# --------------------------------------------------------------------------- #
+def test_network_policy_default_open():
+    assert config.DEFAULTS["network_policy"] == "open"
+    # the default resolves to network NOT denied (workers need the claude API / installs)
+    assert config.network_deny(config.DEFAULTS) is False
+
+
+def test_network_policy_deny_cuts_network():
+    assert config.network_deny({"network_policy": "deny"}) is True
+    # case-insensitive
+    assert config.network_deny({"network_policy": "DENY"}) is True
+
+
+def test_deprecated_sandbox_deny_network_alias_honoured():
+    # back-compat: the old boolean still cuts the network (alias of network_policy=deny)
+    assert config.network_deny({"sandbox_deny_network": True}) is True
+    assert config.network_deny({"sandbox_deny_network": False}) is False
+
+
+def test_per_task_offline_forces_deny_even_when_policy_open():
+    # `orc add --offline` tightens a single task to deny regardless of the shift policy
+    assert config.network_deny({"network_policy": "open"}, task_offline=True) is True
+
+
+def test_offline_only_tightens_never_loosens():
+    # an absent offline flag under an open policy stays open; a deny policy stays deny
+    assert config.network_deny({"network_policy": "open"}, task_offline=False) is False
+    assert config.network_deny({"network_policy": "deny"}, task_offline=False) is True
+
+
 def test_malformed_config_falls_back_to_defaults(tmp_path, monkeypatch):
     home = tmp_path / "home"
     monkeypatch.setenv("ORC_HOME", str(home))

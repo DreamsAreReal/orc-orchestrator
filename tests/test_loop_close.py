@@ -286,7 +286,8 @@ def test_spawn_records_window_id_not_none(tmp_path, monkeypatch):
                         lambda: {"active": True, "remaining_minutes": 200})
     # F15: spawn_one routes through the backend selector; mock spawn_worker + worker_pid
     monkeypatch.setattr(dispatcher.spawn, "spawn_worker",
-                        lambda cfg, project, cbin, prompt, session=None: (True, "4242"))
+                        lambda cfg, project, cbin, prompt, session=None, deny_network=None:
+                        (True, "4242"))
     monkeypatch.setattr(dispatcher.spawn, "worker_pid",
                         lambda cfg, project, session, handle=None: 55555)
 
