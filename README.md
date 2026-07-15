@@ -1,7 +1,10 @@
 # orc — autonomous task-shift loop for Claude Code
 
 Drop ~10 tasks into a queue in the morning; your Mac picks them up and drives each one
-through the `pipeline` conveyor to the end — unattended, reliably, safely.
+through the [`pipeline`](https://github.com/DreamsAreReal/claude-pipeline) quality conveyor to the end — unattended, reliably, safely.
+
+> `orc` is the **automation layer**; the quality conveyor it runs each task through lives in
+> the separate [**claude-pipeline**](https://github.com/DreamsAreReal/claude-pipeline) repo.
 
 - **Queue**: [beads](https://github.com/steveyegge/beads) (`bd`) — atomic claim, ready
   semantics, a gate is a blocking task on a human.

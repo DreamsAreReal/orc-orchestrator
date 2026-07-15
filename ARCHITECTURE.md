@@ -19,7 +19,7 @@ reliably, safely, spending otherwise-idle Claude Max quota.
                                  budget, watchdog, crash recovery, the newspaper.
 3. WORKERS    real Claude Code   interactive `claude` in Terminal.app (NOT headless), each
                                  confined by an OS-sandbox + deny-walls, driven via the
-                                 `pipeline` skill.
+                                 `pipeline` skill (see the separate claude-pipeline repo).
 ```
 
 ## Key decisions and the reasoning
