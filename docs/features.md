@@ -162,7 +162,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] scorecard находит `docs/tasks/<слаг>/`, хуки видят STATE там, doctor exit 0
 - [x] патч откатывается `git revert` одним коммитом, doctor снова зелёный (проверено)
 Проверка: `bash ~/.claude/skills/pipeline/bin/pipeline-lint.sh --doctor` + scorecard на обоих макетах + revert-тест (evidence/F11/)
-Статус: self-pass
+Статус: verified
 Доказательство:
 - РАСКЛАДКА (диск важнее RS-02): канон orc = `<project>/docs/tasks/<slug>/STATE.md` (dispatcher.task_state_path, design.md) — НЕ `tasks/*/docs` из RS-02. Патч построен под канон кода. 3 точки кода + 4 промптовые (минимальный дифф, рамка чужого кода).
 - Характеризация ДО/ПОСЛЕ на 2 smoke-макетах (proj-a стандартный `docs/`, proj-b tasks-раскладка), патч на git-ветке `orc-tasks-workspace-patch` в ~/.claude, коммит 7b57e2f:
@@ -181,7 +181,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] DONE каждой задачи подтверждён ВНЕШНИМИ фактами (git-коммиты/артефакты), не заявлением воркера
 - [x] сериализация проекта соблюдена, 0 дублей, газета корректна
 Проверка: `bash .verify/e2e-shift.sh` (полный сценарий) + вывод в evidence/F12/
-Статус: self-pass
+Статус: verified
 Доказательство:
 - `bash .verify/e2e-shift.sh` → "F12 E2E PASS (3/3 terminal by external facts; gate parked; newspaper correct)", exit 0. РЕАЛЬНЫЙ claude на 3 задачах (2 проекта ~/Desktop/orc-test-{1,2} + 1 гейт), изолированный hub. Лог: docs/evidence/F12/e2e-shift.log.
   - ВНЕШНИЕ ФАКТЫ: t1 git-коммит `6c6fdea orc: add READY.txt` + артефакт READY.txt=ready (orc-test-1); t2 `f1c29a8 orc: add HELLO.txt` + HELLO.txt=hello (orc-test-2); гейт-задача parked-on-gate (STATE.md «waiting on gate»). Не заявление воркера — реальные коммиты и файлы.
@@ -248,14 +248,14 @@ North Star: утром накидал ~10 задач по проектам — M
 ### ФИКС-ВОЛНА цикл 1 (фаза 5 verify — P0: блокеры + профминимум-безопасность + полнота)
 Из вердиктов R-final-{E1,E2,E3}. Каждый — фикс + регресс-тест зелёный (evidence в docs/evidence/fix1/).
 БЛОКЕРЫ:
-- [x] **B0 многострочный промпт ломал спавн** (spawn.build_start_command + ghostty; найден пользователем на живом окне): промпт инлайнился в shell/AppleScript; литеральный перенос строки в `do script "..."` рвал AppleScript-парс → shell висел на `quote>`, claude НЕ запускался (однострочные работали, ГЕЙТОВЫЕ/многострочные — нет). Фикс: промпт пишется в `<project>/.orc/prompt-<session>.txt` (sandbox-writable, gitignored, orc-managed) и читается `claude "$(cat <файл>)"` → команда запуска ОДНОСТРОЧНАЯ независимо от контента, промпт байт-в-байт. Статус: self-pass
+- [x] **B0 многострочный промпт ломал спавн** (spawn.build_start_command + ghostty; найден пользователем на живом окне): промпт инлайнился в shell/AppleScript; литеральный перенос строки в `do script "..."` рвал AppleScript-парс → shell висел на `quote>`, claude НЕ запускался (однострочные работали, ГЕЙТОВЫЕ/многострочные — нет). Фикс: промпт пишется в `<project>/.orc/prompt-<session>.txt` (sandbox-writable, gitignored, orc-managed) и читается `claude "$(cat <файл>)"` → команда запуска ОДНОСТРОЧНАЯ независимо от контента, промпт байт-в-байт. Статус: verified
   - `bash .verify/e3/e3-multiline-prompt.sh` → exit 0 (sandbox on/off): многострочный промпт (апострофы/бэктики/кавычки/переносы) round-trips байт-в-байт через printf-seam, 0 continuation. Лог: docs/evidence/fix1/P0ml-multiline-prompt-regress.log
   - `bash .verify/e2e-gate.sh` → PASS (реальный гейт, ранее ломавший shell). Лог: docs/evidence/fix1/P0ml-e2e-gate.log
   - unit: test_multiline_prompt_round_trips_via_file, test_prompt_file_lives_in_orc_managed_scratch, test_ghostty inner-command.
-- [x] **B1 reward-hacking** (dispatcher.poll_completions): DONE засчитывается ТОЛЬКО при внешнем факте (git-коммит после старта воркера ИЛИ изменённый/созданный артефакт); нет факта → park «suspected-fake-done», bd blocked. `watchdog.external_progress` подключён к completion + фильтр расширен (orc-managed .claude/.orc/docs/tasks — не деливерабл). Статус: self-pass
+- [x] **B1 reward-hacking** (dispatcher.poll_completions): DONE засчитывается ТОЛЬКО при внешнем факте (git-коммит после старта воркера ИЛИ изменённый/созданный артефакт); нет факта → park «suspected-fake-done», bd blocked. `watchdog.external_progress` подключён к completion + фильтр расширен (orc-managed .claude/.orc/docs/tasks — не деливерабл). Статус: verified
   - `bash .verify/e3/e3-rewardhack-live.sh` → exit 0: фейк-DONE ПАРКУЕТСЯ (bd blocked, HEAD unchanged), control (реальный коммит) закрывается. Лог: docs/evidence/fix1/B1-rewardhack-regress.log
   - unit: test_poll_done_without_external_fact_is_parked (+ 2 loop-close обновлены под реальный деливерабл, не ослабление).
-- [x] **B2 обфусц. SSH git push + ~/.ssh read** (worker_walls + sandbox): env снимает SSH-push (GIT_SSH_COMMAND/GIT_SSH=/usr/bin/false, SSH_AUTH_SOCK='', core.sshCommand); seatbelt `(deny file-read* (subpath <HOME>/.ssh))`. Статус: self-pass
+- [x] **B2 обфусц. SSH git push + ~/.ssh read** (worker_walls + sandbox): env снимает SSH-push (GIT_SSH_COMMAND/GIT_SSH=/usr/bin/false, SSH_AUTH_SOCK='', core.sshCommand); seatbelt `(deny file-read* (subpath <HOME>/.ssh))`. Статус: verified
   - `bash .verify/e3/e3-exfil2.sh` → exit 0 (3/3): SSH-auth под sandbox denied, git-push через env падает, ключ-read под sandbox EPERM. Комбо real-path (env+sandbox+attacker override) → WALL HELD. Логи: docs/evidence/fix1/B2-exfil-regress.log, B2-combined-realpath.log
   - unit: test_push_neutralizing_env_disables_ssh_transport, test_profile_denies_reading_ssh.
 ПРОФМИНИМУМ-БЕЗОПАСНОСТЬ:
@@ -270,11 +270,11 @@ North Star: утром накидал ~10 задач по проектам — M
 Итог фикс-волны цикл 1: 210 → **226 тестов** (+16), 0 регрессий.
 
 ### ФИКС-ВОЛНА цикл 2 (реверификация R-final-reverify — последний блокер + существенное)
-- [x] **B1 усилен** (external_progress + gitutil): реверификация нашла 2 тривиальных обхода цикла-1 (оракул принимал ЛЮБОЙ foreign dirty-файл / ЛЮБОЙ коммит новее старта). Теперь «внешний факт» = РЕАЛЬНЫЙ непустой деливерабл: (а) коммит засчитывается ТОЛЬКО с непустым diff по non-orc-managed файлу (`commit_touches_real_files`: отвергает `--allow-empty` и STATE.md-only; `commits_since` фильтрует по %ct строго > старта, не по date-fuzzy `--since`); (б) dirty-файл — ТОЛЬКО непустой (`dirty_has_nonempty_file`: отвергает пустой `touch`); non-git фолбэк тоже требует size>0 + исключает orc-managed. Пустой touch / empty-commit / только-STATE.md → park. Статус: self-pass
+- [x] **B1 усилен** (external_progress + gitutil): реверификация нашла 2 тривиальных обхода цикла-1 (оракул принимал ЛЮБОЙ foreign dirty-файл / ЛЮБОЙ коммит новее старта). Теперь «внешний факт» = РЕАЛЬНЫЙ непустой деливерабл: (а) коммит засчитывается ТОЛЬКО с непустым diff по non-orc-managed файлу (`commit_touches_real_files`: отвергает `--allow-empty` и STATE.md-only; `commits_since` фильтрует по %ct строго > старта, не по date-fuzzy `--since`); (б) dirty-файл — ТОЛЬКО непустой (`dirty_has_nonempty_file`: отвергает пустой `touch`); non-git фолбэк тоже требует size>0 + исключает orc-managed. Пустой touch / empty-commit / только-STATE.md → park. Статус: verified
   - `bash .verify/e3/reverify-b1.sh` → exit 0: 7 фейков (вкл. empty-touch, allow-empty-commit) ПАРКУЮТСЯ, 2 реальных деливерабла (непустой файл, непустой коммит) закрываются. Лог: docs/evidence/fix1/B1-reverify-strengthened.log
   - `bash .verify/e3/e3-rewardhack-live.sh` → exit 0: матрица (zero-artifact/empty-touch/allow-empty-commit паркуются; непустой коммит закрывается). Лог: docs/evidence/fix1/B1-rewardhack-regress.log
   - unit: +6 (external_progress: empty-touch/allow-empty/real-commit/state-only-commit/non-git-empty; loop-close: 2 параметр. обхода).
-- [x] **B2-opt-out ГРОМКИЙ** (canary + newspaper + config): реверификация: env-слой САМ не держит прямой ssh (под env-prefix без sandbox `ssh -T git@github` аутентифицируется); B2 держится ТОЛЬКО на sandbox-ssh-read-deny → `allow_no_sandbox=true` МОЛЧА снимал всю SSH/эксфильтрацию-стену. Теперь: `[WARN]` в canary на каждом старте + ⚠-баннер в газете «воркер БЕЗ OS-стен: ~/.ssh + SSH/сеть-эксфильтрация НЕ заблокированы» + расширенный threat-model коммент в config. Статус: self-pass
+- [x] **B2-opt-out ГРОМКИЙ** (canary + newspaper + config): реверификация: env-слой САМ не держит прямой ssh (под env-prefix без sandbox `ssh -T git@github` аутентифицируется); B2 держится ТОЛЬКО на sandbox-ssh-read-deny → `allow_no_sandbox=true` МОЛЧА снимал всю SSH/эксфильтрацию-стену. Теперь: `[WARN]` в canary на каждом старте + ⚠-баннер в газете «воркер БЕЗ OS-стен: ~/.ssh + SSH/сеть-эксфильтрация НЕ заблокированы» + расширенный threat-model коммент в config. Статус: verified
   - Живой: canary `[WARN] sandbox: OS-sandbox DISABLED ...`, газета `⚠ ВНИМАНИЕ: OS-песочница ОТКЛЮЧЕНА ...`. Лог: docs/evidence/fix1/B2-optout-loud.log. unit: test_canary_warns_loud_when_sandbox_disabled, test_newspaper_shows_no_sandbox_banner.
 Итог фикс-волны (циклы 1+2): 210 → **235 тестов** (+25), 0 регрессий. Смоук: pytest 235, reverify-b1/e3-rewardhack/e3-exfil2/e2e-loop-close/e2e-gate — все зелёные. Остаётся beta-финал.
 
