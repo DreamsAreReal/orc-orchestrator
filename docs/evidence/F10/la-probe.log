@@ -1,0 +1,14 @@
+Wed Jul 15 12:24:32 +04 2026
+PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+{
+  "loggedIn": true,
+  "authMethod": "claude.ai",
+  "apiProvider": "firstParty",
+  "email": "54rc4h7tpm@privaterelay.appleid.com",
+  "orgId": "4959e8dc-b325-4619-9cdf-ca2df836fbc0",
+  "orgName": "54rc4h7tpm@privaterelay.appleid.com's Organization",
+  "subscriptionType": "max"
+}
+auth_exit=0
+Keychain "login.keychain" no-timeout
+keychain_exit=0

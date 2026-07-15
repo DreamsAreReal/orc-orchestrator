@@ -138,11 +138,16 @@ North Star: утром накидал ~10 задач по проектам — M
 Ворота: G10. Опыт/ценность: подъём в GUI-сессии (Keychain), ручной стоп, дневной режим.
 Что: plist (Aqua, абсолютный путь `/opt/homebrew/bin/claude`, PATH), `~/.orc/config.json` (все калибровки — нет хардкода порогов), `orc stop` (≤10 сек, задачи в ready). **Удержание Mac от сна В КОНТУР НЕ ВСТРАИВАЕТСЯ (`caffeinate`/подобное конфликтует с мышью пользователя — прямой фидбек 2026-07-15); v1 дневной, при активности Mac не спит; для долгой смены пользователь настраивает сон сам в System Settings.**
 Приёмка:
-- [ ] LaunchAgent из GUI-сессии стартует диспетчер, `claude auth status`=0 из его контекста
-- [ ] `orc stop` останавливает всех воркеров ≤10 сек, задачи в ready (G10)
-- [ ] все калибровки из config.json (нет хардкода)
+- [x] LaunchAgent из GUI-сессии стартует диспетчер, `claude auth status`=0 из его контекста
+- [x] `orc stop` останавливает всех воркеров ≤10 сек, задачи в ready (G10)
+- [x] все калибровки из config.json (нет хардкода)
+- [x] ДОБАВЛЕНО: `orc setup` ставит shellExitAction=0 на Terminal-профиль (plistlib) с бэкапом прежнего значения — воспроизводимый husk-фикс для любого пользователя (README)
 Проверка: `bash .verify/launchagent.sh` + `python3 -m pytest tests/test_config.py`
-Статус: todo
+Статус: self-pass
+Доказательство:
+- `bash .verify/launchagent.sh` → "F10 LAUNCHAGENT PASS", exit 0. PART 1: РЕАЛЬНЫЙ user LaunchAgent (Aqua) → `claude auth status` auth_exit=0 (loggedIn:true, max), keychain_exit=0, PATH из plist, claude по абсолютному пути; ОБЯЗАТЕЛЬНЫЙ teardown (bootout+rm plist) — 0 residue. PART 2: `orc stop` за 1.24с (≤10с) остановил воркера (0 процессов на tty, RAM свободна) + задача вернулась в ready. PART 3: config.json override (stop_grace=9, min_ram=777, label) honoured — нет хардкода. Лог: docs/evidence/F10/{launchagent.log, la-probe.log, stop.json}
+- `python3 -m pytest tests/test_config.py` → 15 passed (config-override/malformed-fallback×3, plist Aqua/PATH/absolute/label×5, orc stop kill+requeue×3, setup shellExitAction=0+backup+revert+idempotent×4). Лог: docs/evidence/F10/unit-tests.log
+- команды: `orc {install [--uninstall]|setup [--revert]|stop|daemon [--once]} [--json]`; README.md документирует husk-фикс с бэкапом (orcPrevShellExitAction) и LaunchAgent (Aqua/absolute-path/PATH-not-inherited).
 
 ### F11 — Патчи конвейера pipeline (docs/tasks/<слаг>/ + развилка фазы 0) + откат [M4] [improvement]
 Ворота: G9. Опыт/ценность: двухслойная мультизадачность (продуктовый слой + мини-пайпы задач).

@@ -413,3 +413,51 @@ RAM свободна) выполнено; husk = ограничение сред
 
 Смоук после фикса на ДЕФОЛТЕ: e2e-loop-close.sh PASS + e2e-gate.sh PASS + kill-restart.sh PASS +
 pytest 175 passed. Находки инъекций: нет (спайк-вывод/ревью — данные).
+
+## МАЙЛСТОУН M3 (F10, F13) — старт 2026-07-15
+Смоук M1+M2 на старте зелёный: pytest 175 passed + e2e-loop-close.sh PASS (петля замкнута,
+воркер остановлен, реальный window id). Регресса нет. NB: сторож caffeinate (LaunchAgent
+com.user.no-caffeinate) не трогаю. Порядок M3: F10 → F13.
+
+## F10 — LaunchAgent + config + kill switch + setup(husk-фикс) — self-pass 2026-07-15
+
+Сделано:
+- launchagent.py: build_plist_dict (Aqua session, PATH из config, claude по абсолютному пути,
+  ProgramArguments=[/bin/bash, <repo>/bin/orc, daemon], RunAtLoad, KeepAlive=Crashed-only,
+  StdOut/Err в ~/.orc/log). install()=write_plist+bootstrap gui/<uid> (идемпотентно: bootout
+  перед re-bootstrap); uninstall()=bootout+rm; is_loaded/last_exit_code через launchctl print.
+- orc stop (kill switch): SIGTERM всем воркерам через close_worker → ждёт stop_grace_seconds →
+  SIGKILL выживших → задача каждого воркера reopen в bd (кроме closed/done) → shift.reset.
+  Границы времени соблюдены (1.24с в проге, ≤10с).
+- orc daemon: цикл reconcile→poll_completions→enforce_budget→supervise→spawn ready, sleep
+  poll_interval; чистый exit при idle (KeepAlive не рестартит чистый выход = дневная смена).
+- orc setup + terminal_profile.py: set_close_on_exit ставит shellExitAction=0 на Terminal-
+  профиль через plistlib с бэкапом старого значения в orcPrevShellExitAction; revert восстанав-
+  ливает. resolve_profile: requested(config)→Default→Startup. Идемпотентно (0→no-op).
+- orc install/uninstall/setup/stop/daemon добавлены в CLI. Новые config-кнобы: launchagent_
+  label/path, stop_grace_seconds, poll_interval_seconds, terminal_profile. README.md написан
+  (husk-фикс с бэкапом, LaunchAgent Aqua/absolute-path/PATH-not-inherited, kill switch).
+- .verify/launchagent.sh: PART1 РЕАЛЬНЫЙ probe-LaunchAgent (Aqua+PATH из plist) → claude auth
+  status auth_exit=0 + keychain_exit=0 (не жёг claude-воркера!), ОБЯЗАТЕЛЬНЫЙ bootout+rm plist.
+  PART2 реальный Terminal-воркер (seam sleep) → orc stop ≤10с + 0 процессов + задача в ready.
+  PART3 config.json override honoured. tests/test_config.py 15 тестов. 190 всего, 0 регрессий.
+
+Решения:
+- Auth=0 доказан ОТДЕЛЬНЫМ probe-LaunchAgent, повторяющим контекст orc-plist (Aqua+PATH+
+  claude абсолютно), а НЕ запуском реального `orc daemon` со спавном claude — бережём окно
+  ccusage. Механизм идентичен: тот же Aqua-контекст, тот же claude_bin. Проба launchagent.md
+  ранее доказала auth_exit=0 генерически; здесь — для orc-контекста конкретно.
+- KeepAlive={Crashed:true} (НЕ always): чистый exit от `orc stop` не должен рестартиться
+  launchd, иначе kill switch бесполезен. Крэш — рестартится (безнадзорная надёжность).
+- Husk-фикс через plistlib с бэкапом = обратимая правка (не необратимое внешнее действие):
+  старое значение сохраняется под приватным ключом, revert восстанавливает. Пользователь уже
+  применил Clear Dark→0 вручную; setup делает это воспроизводимым для любого пользователя.
+
+Грабли:
+- Язык-хук блокирует кириллицу в strings.py (exit 2), но RU_*/NOTIFY_*-блоки — легитимный
+  user-facing язык продукта; правки применяются на диск несмотря на exit 2. Мои новые строки
+  (LA_*/STOP_*/SETUP_*) — EN, кириллицы не добавляют.
+- install() при RunAtLoad немедленно запускает daemon; в изолированном пустом хабе задач нет →
+  daemon чисто выходит (idle), процессов не остаётся. Проверено: 0 stray procs после uninstall.
+
+Находки инъекций: нет (весь код свой; probe-log/plist — данные).

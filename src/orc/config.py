@@ -50,6 +50,26 @@ DEFAULTS = {
     # the shell -- proven exhaustively in .spikes/probe/ghostty-exec.md), so it must NOT be
     # the default. Ghostty stays an opt-in backend for a future build where `-e` works.
     "terminal": "terminal",
+    # --- F10: LaunchAgent (autostart in the GUI/Aqua session) --------------------- #
+    # The dispatcher runs as a USER LaunchAgent in the Aqua session so it can reach the
+    # login Keychain and a working `claude auth` (proven: .spikes/probe/launchagent.md,
+    # auth_exit=0). LaunchAgents do NOT inherit the interactive shell PATH, so we set an
+    # explicit PATH in the plist and call claude by absolute path (claude_bin above).
+    "launchagent_label": "com.user.orc",
+    # PATH written into the plist so brew binaries (bd, ccusage, node) resolve for the
+    # dispatcher and any child it spawns. No threshold is hard-coded in code -- this is a
+    # calibration knob like the rest.
+    "launchagent_path": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+    # F10 kill switch: how long `orc stop` waits for a worker to die after SIGTERM before
+    # escalating to SIGKILL. The whole stop must complete within ~10s (G10 acceptance).
+    "stop_grace_seconds": 5,
+    # F10 daemon: seconds between dispatch ticks in the LaunchAgent loop.
+    "poll_interval_seconds": 15,
+    # F10 setup: the Terminal.app profile orc spawns workers into. `orc setup` sets its
+    # shellExitAction to 0 (close the window when the shell exits) via plistlib so husk
+    # windows do not accumulate for ANY user -- with a backup of the previous value.
+    # None -> resolve the machine's default Terminal profile at setup time.
+    "terminal_profile": None,
 }
 
 

@@ -6,6 +6,7 @@ User-facing report text is Russian; operational CLI lines are English.
 import os
 import sys
 import json
+import time as _time
 import argparse
 
 from . import config
@@ -225,6 +226,191 @@ def cmd_status(args):
     return 0
 
 
+def cmd_stop(args):
+    """Kill switch (F10/G10): stop all workers <=10s; their tasks return to ready.
+
+    SIGTERM every worker's session (kill by tty/backend), wait up to stop_grace_seconds,
+    then SIGKILL any survivor. Each stopped task is reopened in bd so the next shift
+    re-serves it (nothing is lost). The whole operation is bounded so an operator can
+    always halt an autonomous shift promptly.
+    """
+    cfg = config.load()
+    hub = config.hub_dir()
+    state = shiftmod.load()
+    workers = list(state.get("workers", []))
+    if not workers:
+        if args.json:
+            print(json.dumps({"stopped": [], "secs": 0}))
+        else:
+            print(S.STOP_NO_WORKERS)
+        return 0
+
+    t0 = _time.time()
+    grace = cfg.get("stop_grace_seconds", 5)
+    ttys = []
+    for w in workers:
+        # backend-aware stop (Terminal: kill by tty; Ghostty: kill by session marker)
+        dispatcher.spawn.close_worker(cfg, w.get("tab_id"), session=w.get("session"))
+        tty = dispatcher.spawn.window_tty(w.get("tab_id")) if w.get("tab_id") else None
+        if tty:
+            ttys.append(tty)
+
+    # bounded wait for the SIGTERM'd processes to exit, then SIGKILL any survivor.
+    deadline = t0 + grace
+    while _time.time() < deadline:
+        if not any(dispatcher.spawn.pids_on_tty(t) for t in ttys):
+            break
+        _time.sleep(0.2)
+    for t in ttys:
+        for pid in dispatcher.spawn.pids_on_tty(t):
+            try:
+                os.kill(int(pid), 9)
+            except OSError:
+                pass
+
+    # return each stopped task to ready (bd reopen) so the shift re-serves it; reset shift.
+    requeued = []
+    for w in workers:
+        task_id = w.get("task")
+        if not task_id:
+            continue
+        try:
+            task = beads.show(hub, task_id)
+            if task and task.get("status") not in ("closed", "done"):
+                beads.reopen(hub, task_id)
+                requeued.append(task_id)
+        except beads.BeadsError:
+            pass
+    shiftmod.save(shiftmod.reset())
+
+    secs = round(_time.time() - t0, 1)
+    if args.json:
+        print(json.dumps({"stopped": [w.get("task") for w in workers],
+                          "requeued": requeued, "secs": secs}))
+    else:
+        print(S.STOP_DONE.format(n=len(workers), secs=secs))
+        for tid in requeued:
+            print(S.STOP_TASK_REQUEUED.format(task=tid))
+    return 0
+
+
+def cmd_daemon(args):
+    """Dispatcher loop run by the LaunchAgent (F10). Runs until stopped/idle.
+
+    One tick = reconcile -> poll completions -> admit+spawn ready tasks -> supervise.
+    Sleeps `poll_interval` between ticks. Exits cleanly when the queue is fully drained
+    (KeepAlive.Crashed means a clean exit is NOT restarted -- a daytime shift ends when
+    the work is done). ORC_DAEMON_ONCE=1 runs a single tick (used by the verify script).
+    """
+    from . import watchdog
+    cfg = config.load()
+    hub = config.hub_dir()
+    config.ensure_home()
+    if not beads.bd_available() or not os.path.isdir(os.path.join(hub, ".beads")):
+        print(S.ERR_HUB_MISSING, file=sys.stderr)
+        return 1
+
+    once = os.environ.get("ORC_DAEMON_ONCE") == "1" or args.once
+    interval = cfg.get("poll_interval_seconds", 15)
+    idle_ticks = 0
+    while True:
+        state = shiftmod.load()
+        state, dropped = dispatcher.reconcile(state, hub, cfg=cfg)
+        state, _tr = dispatcher.poll_completions(state, hub, cfg=cfg)
+        dispatcher.enforce_budget(cfg, hub, state)
+        try:
+            watchdog.supervise(cfg, hub, state)
+        except Exception:
+            pass  # watchdog must never crash the daemon
+        tasks = dispatcher.order_ready(beads.ready(hub))
+        limit = cfg.get("max_workers", 1)
+        for task in tasks:
+            if len(state.get("workers", [])) >= limit:
+                break
+            oks, detail, state = dispatcher.spawn_one(cfg, hub, state, task)
+            if oks:
+                print(detail)
+        shiftmod.save(state)
+        # idle = no workers and no ready tasks -> the shift is drained; exit cleanly.
+        if not state.get("workers") and not tasks:
+            idle_ticks += 1
+        else:
+            idle_ticks = 0
+        if once or idle_ticks >= 2:
+            break
+        _time.sleep(interval)
+    return 0
+
+
+def cmd_setup(args):
+    """F10: make husk windows not accumulate for any user (reproducible profile fix).
+
+    Sets the orc Terminal profile's shellExitAction to 0 (close window on shell exit) via
+    plistlib, backing up the previous value first. Also hints at `orc install` for autostart.
+    """
+    from . import terminal_profile as tp
+    cfg = config.load()
+    result = {"profile": None, "changed": False}
+    path = tp.terminal_plist_path()
+    if os.path.exists(path):
+        try:
+            data = tp._load(path)
+            profile = tp.resolve_profile(data, requested=cfg.get("terminal_profile"))
+            if profile:
+                if getattr(args, "revert", False):
+                    r = tp.revert(path, profile)
+                    result = {"profile": profile, "reverted": r.get("reverted")}
+                    if not args.json:
+                        print("orc setup: reverted profile '%s' shellExitAction" % profile)
+                else:
+                    r = tp.set_close_on_exit(path, profile)
+                    result = {"profile": profile, "changed": r["changed"], "old": r["old"]}
+                    if not args.json:
+                        if r["changed"]:
+                            print(S.SETUP_PROFILE_DONE.format(profile=profile, old=r["old"]))
+                        else:
+                            print(S.SETUP_PROFILE_ALREADY.format(profile=profile))
+            else:
+                if not args.json:
+                    print(S.SETUP_PROFILE_NONE)
+        except Exception as e:
+            print("orc setup: profile edit failed: %s" % e, file=sys.stderr)
+            if not args.json:
+                print(S.SETUP_PROFILE_NONE)
+    else:
+        if not args.json:
+            print(S.SETUP_PROFILE_NONE)
+    if not args.json:
+        print(S.SETUP_LA_HINT)
+    if args.json:
+        print(json.dumps(result))
+    return 0
+
+
+def cmd_install(args):
+    """F10: install (and bootstrap) the user LaunchAgent for autostart in the GUI session."""
+    from . import launchagent as la
+    cfg = config.load()
+    config.ensure_home()
+    if getattr(args, "uninstall", False):
+        ok, path = la.uninstall(cfg)
+        if not args.json:
+            print(S.LA_UNINSTALLED.format(label=cfg.get("launchagent_label")))
+        else:
+            print(json.dumps({"uninstalled": True, "label": cfg.get("launchagent_label")}))
+        return 0
+    ok, detail = la.install(cfg)
+    if not ok:
+        print(S.LA_BOOTSTRAP_FAIL.format(err=detail), file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps({"installed": True, "label": cfg.get("launchagent_label"),
+                          "plist": detail}))
+    else:
+        print(S.LA_INSTALLED.format(label=cfg.get("launchagent_label"), path=detail))
+    return 0
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="orc", description="autonomous task-shift loop for Claude Code")
     sub = p.add_subparsers(dest="cmd")
@@ -269,6 +455,28 @@ def build_parser():
     pt.add_argument("--newspaper", action="store_true", help="print the completion newspaper")
     pt.add_argument("--json", action="store_true")
     pt.set_defaults(func=cmd_status)
+
+    # F10: kill switch
+    pstop = sub.add_parser("stop", help="stop all workers now; their tasks return to ready")
+    pstop.add_argument("--json", action="store_true")
+    pstop.set_defaults(func=cmd_stop)
+
+    # F10: dispatcher loop (run by the LaunchAgent)
+    pd = sub.add_parser("daemon", help="run the dispatcher loop (used by the LaunchAgent)")
+    pd.add_argument("--once", action="store_true", help="run a single dispatch tick and exit")
+    pd.set_defaults(func=cmd_daemon)
+
+    # F10: setup (Terminal profile husk fix) + install (LaunchAgent autostart)
+    pset = sub.add_parser("setup", help="configure the Terminal profile so husk windows close")
+    pset.add_argument("--revert", action="store_true",
+                     help="restore the profile's previous shellExitAction from the orc backup")
+    pset.add_argument("--json", action="store_true")
+    pset.set_defaults(func=cmd_setup)
+
+    pin = sub.add_parser("install", help="install the user LaunchAgent (autostart in GUI session)")
+    pin.add_argument("--uninstall", action="store_true", help="bootout and remove the LaunchAgent")
+    pin.add_argument("--json", action="store_true")
+    pin.set_defaults(func=cmd_install)
 
     return p
 

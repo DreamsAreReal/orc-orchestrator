@@ -152,3 +152,23 @@ RU_GATE_IRREVERSIBLE = (
 NOTIFY_GATE_TITLE = "orc: задача ждёт твоего решения"
 NOTIFY_GATE_BODY = "{id} — {title}. Открой газету (`orc status --newspaper`)."
 NOTIFY_GATE_SUBTITLE = "гейт: {scope}"
+
+# --- F10: LaunchAgent install / kill switch / setup (en; operator terminal) ---
+LA_INSTALLED = "LaunchAgent installed and bootstrapped: {label} (plist {path})"
+LA_UNINSTALLED = "LaunchAgent removed: {label}"
+LA_NOT_LOADED = "LaunchAgent not loaded: {label}"
+LA_STATUS_LOADED = "LaunchAgent loaded: {label} (last exit {code})"
+LA_BOOTSTRAP_FAIL = "error: launchctl bootstrap failed: {err}"
+STOP_NO_WORKERS = "orc stop: no active workers; nothing to stop."
+STOP_DONE = "orc stop: stopped {n} worker(s) in {secs}s; their task(s) returned to ready."
+STOP_TASK_REQUEUED = "  requeued to ready: {task}"
+SETUP_PROFILE_DONE = (
+    "orc setup: Terminal profile '{profile}' shellExitAction set to 0 "
+    "(close window when the shell exits); previous value {old} backed up.")
+SETUP_PROFILE_ALREADY = (
+    "orc setup: Terminal profile '{profile}' already closes windows on exit "
+    "(shellExitAction=0); nothing to change.")
+SETUP_PROFILE_NONE = (
+    "orc setup: could not resolve a Terminal profile to configure "
+    "(is Terminal.app configured?). Skipped the husk-window fix.")
+SETUP_LA_HINT = "orc setup: run `orc install` to autostart the dispatcher via LaunchAgent."

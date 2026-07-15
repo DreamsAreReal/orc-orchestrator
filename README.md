@@ -1,0 +1,85 @@
+# orc — autonomous task-shift loop for Claude Code
+
+Drop ~10 tasks into a queue in the morning; your Mac picks them up and drives each one
+through the `pipeline` conveyor to the end — unattended, reliably, safely.
+
+- **Queue**: [beads](https://github.com/steveyegge/beads) (`bd`) — atomic claim, ready
+  semantics, a gate is a blocking task on a human.
+- **Dispatcher** (this repo, python3-stdlib): `bd ready → claim → re-validate → preflight →
+  project-mutex → spawn → monitor`, with admission/back-pressure, budget caps, a watchdog,
+  crash recovery, and a live newspaper.
+- **Workers**: REAL interactive Claude Code sessions in Terminal.app (not headless),
+  under OS-sandbox + deny-wall boundaries.
+
+## Requirements
+
+- macOS with a GUI (Aqua) login session — the OAuth token lives in the login Keychain,
+  which is only reachable from a GUI session (hence a **user LaunchAgent**, not cron).
+- `brew install beads` (`bd`), `claude` at `/opt/homebrew/bin/claude`, `ccusage` on PATH.
+
+## Quick start
+
+```bash
+bin/orc init                                  # create the ~/.orc hub (one beads queue)
+bin/orc setup                                 # configure Terminal so husk windows close (see below)
+bin/orc add ~/proj "do the thing"             # add a task (repeat, or use --batch from stdin)
+bin/orc start                                 # canary preflight, then run the shift
+bin/orc status --newspaper                    # the digest catches up to DONE on its own
+bin/orc stop                                  # kill switch: stop all workers, requeue tasks
+```
+
+All calibration lives in `~/.orc/config.json` (thresholds, caps, denylist, MCP allowlist,
+terminal backend, LaunchAgent label/PATH). There are **no hard-coded thresholds** in code —
+`orc init` writes the defaults; edit the file to tune.
+
+## Autostart via LaunchAgent (F10)
+
+```bash
+bin/orc install            # write + bootstrap the user LaunchAgent (autostart at login)
+bin/orc install --uninstall  # bootout + remove it
+```
+
+The generated plist:
+
+- runs in the **Aqua** session (`LimitLoadToSessionType = Aqua`) so the dispatcher can
+  reach the login Keychain and a working `claude auth` (proven: `auth_exit=0`);
+- sets an explicit **PATH** and calls `claude` by **absolute path** — LaunchAgents do
+  **not** inherit the interactive shell PATH;
+- `KeepAlive` only on `Crashed`, so a deliberate `orc stop` (clean exit) truly stops it.
+
+The label, PATH and claude binary all come from `config.json`.
+
+> Keeping the Mac awake for a long shift is **not** built into orc: `caffeinate` and
+> similar conflict with the user's mouse. v1 is a daytime loop (the Mac stays awake while
+> active); for a long unattended shift, set sleep behaviour yourself in System Settings.
+
+## `orc setup` — reproducible husk-window fix
+
+Terminal.app leaves an empty "husk" window after a worker's shell exits **unless** the
+profile's `shellExitAction` is `0` (close the window when the shell exits). `orc setup`
+makes this reproducible for any user: it edits the orc Terminal profile's `shellExitAction`
+to `0` via `plistlib`, **backing up the previous value first** (under a private
+`orcPrevShellExitAction` key) so the change is reversible:
+
+```bash
+bin/orc setup            # set shellExitAction=0 on the orc Terminal profile (with backup)
+bin/orc setup --revert   # restore the profile's previous shellExitAction from the backup
+```
+
+The profile is the machine's default Terminal profile (override with `terminal_profile` in
+`config.json`). Quit Terminal.app before running `orc setup` so it does not overwrite the
+plist on exit; the edit is written to disk regardless. Killing the worker process (which
+frees its RAM) always happens; the profile fix removes the leftover empty window.
+
+## `orc stop` — kill switch (G10)
+
+`orc stop` SIGTERMs every worker's session, waits up to `stop_grace_seconds`, then SIGKILLs
+any survivor (bounded, typically well under 10s). Each stopped task is returned to `ready`
+in bd so the next shift re-serves it — nothing is lost.
+
+## Verification
+
+- `python3 -m pytest tests/` — unit tests (config, admission, watchdog, recovery, …).
+- `bash .verify/launchagent.sh` — LaunchAgent auth=0, kill switch, config-driven calibration.
+- `bash .verify/sandbox-walls.sh` — OS-sandbox blocks obfuscated escapes (F13).
+- `bash .verify/e2e-loop-close.sh` — the full add → shift → newspaper loop closes.

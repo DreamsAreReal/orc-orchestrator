@@ -1,0 +1,45 @@
+=== PART 1: LaunchAgent (Aqua GUI) -> claude auth status = 0 ===
+bootstrap gui/501 OK
+--- probe log (from LaunchAgent Aqua context) ---
+Wed Jul 15 12:24:32 +04 2026
+PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+{
+  "loggedIn": true,
+  "authMethod": "claude.ai",
+  "apiProvider": "firstParty",
+  "email": "54rc4h7tpm@privaterelay.appleid.com",
+  "orgId": "4959e8dc-b325-4619-9cdf-ca2df836fbc0",
+  "orgName": "54rc4h7tpm@privaterelay.appleid.com's Organization",
+  "subscriptionType": "max"
+}
+auth_exit=0
+Keychain "login.keychain" no-timeout
+keychain_exit=0
+PART 1 PASS: claude auth status = 0 from the LaunchAgent GUI context (Keychain reachable, keychain_exit=0).
+probe LaunchAgent torn down (bootout + plist removed).
+
+=== PART 2: kill switch `orc stop` <=10s, task returns to ready ===
+orc hub initialized at /tmp/orc-f10-home.3o2UOD (beads queue ready inside .beads/)
+added task orc-f10-home_3o2UOD-8g8
+=== canary preflight ===
+[ ok ] bd: bd on PATH, queue at /tmp/orc-f10-home.3o2UOD/.beads
+[ ok ] auth: loggedIn via /opt/homebrew/bin/claude
+[ ok ] ccusage: window active, 275 min remaining
+[ ok ] notify: osascript available
+[ ok ] ram: 2222 MB free (>= 400)
+canary: all preflight checks passed; shift starting
+spawned worker for orc-f10-home_3o2UOD-8g8 in /tmp/orc-f10-proj.BASXFT (Terminal window id 4991)
+workers before stop: 1 (ttys: /dev/ttys001)
+orc stop output: {"stopped": ["orc-f10-home_3o2UOD-8g8"], "requeued": ["orc-f10-home_3o2UOD-8g8"], "secs": 1.2}
+orc stop wall time: 1.24s
+live worker procs after stop: 0 ; ready queue: [orc-f10-home_3o2UOD-8g8]
+  [ok] stop completed in <=10s
+  [ok] all worker processes stopped (RAM freed)
+  [ok] task orc-f10-home_3o2UOD-8g8 returned to ready
+
+=== PART 3: all calibrations from config.json (no hard-code) ===
+  [ok] config-driven: stop_grace=9 min_ram=777 label=com.user.orc-custom claude_bin=/opt/homebrew/bin/claude
+PART 3 PASS: thresholds/label/PATH all sourced from config.json.
+
+=== RESULT ===
+F10 LAUNCHAGENT PASS (Aqua auth=0; orc stop <=10s + task requeued; all calibrations from config.json).
