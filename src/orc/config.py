@@ -42,6 +42,15 @@ DEFAULTS = {
     "gate_card_cap": 5,            # max gate cards approved in one batch (F9)
     "secret_denylist_extra": [],   # extra env var patterns to strip (F1 base is built-in)
     "mcp_allowlist": [],           # worker MCP servers (default: none) (F1)
+    # F13: OS-sandbox (macOS seatbelt) as the PRIMARY wall over the F1 pattern-hook. Workers
+    # run under `sandbox-exec` with a profile that allows file writes ONLY inside the task
+    # workspace -- obfuscated escapes (base64|bash rm, python rmtree, find -delete) are
+    # blocked at the syscall level. Default ON (.spikes/probe/sandbox.md proves the walls).
+    "sandbox": True,
+    # Fully block outbound network for the worker (per-host allowlisting is unreliable in
+    # user seatbelt -- see the spike). Default OFF: workers need the claude API / git fetch /
+    # brew; git push stays blocked by the F1 hook. Turn on for locked-down runs.
+    "sandbox_deny_network": False,
     "task_token_cap": 0,           # 0 = unlimited (F6 overrides)
     "shift_token_cap": 0,          # 0 = unlimited (F6)
     "notify": "macos",             # notification channel (F9)

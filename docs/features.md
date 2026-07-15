@@ -188,10 +188,16 @@ North Star: утром накидал ~10 задач по проектам — M
 Ворота: G0c, безопасность. Опыт/ценность: паттерн-хук обходится обфускацией (base64|bash, xargs rm, python shutil.rmtree, find -delete) — для безнадзорного bypass нужна OS-стена.
 Что: воркеры под OS-sandbox (macOS seatbelt, из волны A: ФС-запись только в workspace + сеть по allowlist, покрывает подпроцессы, −84% промптов) как ОСНОВНАЯ граница; PreToolUse-hook — вторичный слой. Негативный спайк расширяется обфусцированными обходами.
 Приёмка:
-- [ ] обфусцированные обходы (base64|bash rm вне ws, python -c shutil.rmtree, find вне ws -delete) ЗАБЛОКИРОВАНЫ sandbox (evidence/F13/)
-- [ ] запись вне workspace невозможна на уровне ОС, не только hook
+- [x] обфусцированные обходы (base64|bash rm вне ws, python -c shutil.rmtree, find вне ws -delete) ЗАБЛОКИРОВАНЫ sandbox (evidence/F13/)
+- [x] запись вне workspace невозможна на уровне ОС, не только hook
 Проверка: `bash .verify/sandbox-walls.sh` (расширенный негативный спайк) + вывод в evidence/F13/
-Статус: todo
+Статус: self-pass
+Доказательство:
+- СПАЙК `.spikes/probe/sandbox.md` (правило спайка ДО фикса): macOS seatbelt (`sandbox-exec` + профиль deny-file-write* + allow только subpath workspace) блокирует обфусцированные обходы на уровне syscall (независимо от того, как достигнута запись); ключевая находка профиля — НЕ вайтлистить широкий родитель (мой первый профиль пустил /private/tmp = ложная течь). Сеть: полный `(deny network*)` работает; per-host allowlist в user seatbelt ненадёжен — задокументировано (дефолт: сеть вкл, git push держит F1-хук).
+- `bash .verify/sandbox-walls.sh` → "F13 SANDBOX PASS", exit 0. Профиль orc (`sandbox.write_profile`) + обёртка (`sandbox.wrap_command`); 5 обфусцированных обходов sentinel'а ВНЕ workspace (rm / base64|bash / python shutil.rmtree / find -delete / xargs rm) — ВСЕ заблокированы (Operation not permitted, sentinel выжил); запись в ~/.ssh заблокирована; запись ВНУТРИ workspace работает. Лог: docs/evidence/F13/sandbox-walls.log
+- ИНТЕГРАЦИЯ (реальный сквозной спавн): `orc start` спавнит РЕАЛЬНЫЙ Terminal-воркер под sandbox-exec; воркер пытается base64|bash rm sentinel'а вне ws → sentinel ВЫЖИЛ (стена держит через spawn_one→spawn_worker→spawn_terminal→build_start_command→sandbox-exec); профиль записан в `<project>/.orc/sandbox.sb`. См. хвост docs/evidence/F13/sandbox-walls.log.
+- `python3 -m pytest tests/test_sandbox.py` → 10 passed (форма профиля: deny-write+narrow-subpath+no-broad-parent+device-sinks+deny-network×4; write_profile в workspace; wrap_command sandbox-exec; build_start_command wrapped-by-default/opt-out/seatbelt-absent-fallback×3; config default). Лог: docs/evidence/F13/unit-tests.log. 200 тестов всего, 0 регрессий.
+- РЕШЕНИЕ: OS-sandbox — ОСНОВНАЯ стена (переживает обфускацию); PreToolUse-хук F1 — вторичный слой (ловит git push, даёт модели читаемую причину). Дефолт sandbox=on; sandbox_deny_network=off (воркерам нужен claude API/git fetch/brew). Живой claude НЕ жёгся: sandbox-exec + пробное действие = тот же путь enforcement, что у Bash-tool воркера.
 
 ### F15 — Бэкенд-абстракция спавна + чистое закрытие [M2] [фикс-фича из фидбека; ПЕРЕСМОТРЕНА по R-M2]
 Ворота: часть G1/North Star (безнадзорная чистота), UX. Опыт/ценность: рабочий дефолтный спавн + бэкенд-абстракция; цель «0 husk» НЕ достижима скриптом на этой машине (честно).

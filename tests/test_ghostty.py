@@ -96,7 +96,7 @@ def test_backend_explicit_terminal():
 def test_spawn_worker_routes_to_ghostty(monkeypatch):
     monkeypatch.setattr(spawn_ghostty, "ghostty_available", lambda: True)
     monkeypatch.setattr(spawn_ghostty, "spawn_ghostty",
-                        lambda p, c, pr, s: (True, "ORC_SESSION=%s" % s))
+                        lambda p, c, pr, s, cfg=None: (True, "ORC_SESSION=%s" % s))
     ok, handle = spawn.spawn_worker({"terminal": "ghostty"}, "/p", "/c", "pr", "t1")
     assert ok and handle == "ORC_SESSION=t1"
 

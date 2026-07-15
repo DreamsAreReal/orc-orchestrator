@@ -461,3 +461,58 @@ com.user.no-caffeinate) не трогаю. Порядок M3: F10 → F13.
   daemon чисто выходит (idle), процессов не остаётся. Проверено: 0 stray procs после uninstall.
 
 Находки инъекций: нет (весь код свой; probe-log/plist — данные).
+
+## F13 — OS-sandbox (macOS seatbelt) как ОСНОВНАЯ стена поверх F1-хука — self-pass 2026-07-15
+
+СПАЙК (правило спайка ДО фикса): .spikes/probe/sandbox.md. `sandbox-exec` (seatbelt) есть
+(/usr/bin/sandbox-exec). Профиль `(deny file-write*)` + `(allow file-write* (subpath <ws>))`
+блокирует обфусцированные обходы на уровне syscall (не важно, как достигнута запись → покры-
+вает base64|bash rm, python shutil.rmtree, find -delete, xargs rm — всё, что F1-паттерн-хук
+пропускает). ГЛАВНАЯ находка профиля (реальная ловушка): НЕ вайтлистить широкий родитель —
+первый профиль пустил /private/tmp, sentinel там жил → sandbox КОРРЕКТНО разрешил delete
+(ложная «течь» = моя over-broad allowlist). Sentinel в $HOME (вне allow-subpath) → всё блок.
+
+Сделано:
+- sandbox.py: build_profile (deny-write-all + narrow workspace subpath + device-sinks
+  /dev/null|stdout|stderr|tty; опц. extra_write_subpaths; опц. deny_network); write_profile
+  пишет `<ws>/.orc/sandbox.sb` (внутри единственного writable-subpath); wrap_command =
+  `sandbox-exec -f <prof> bash -lc '<inner>'` одной строкой (в тот же osascript/Ghostty-путь).
+- Интеграция: spawn._maybe_sandbox оборачивает inner-команду в build_start_command (Terminal)
+  и build_inner_command (Ghostty) когда cfg.sandbox=true (дефолт) и seatbelt есть; иначе
+  fallback без обёртки (не ломает спавн). cfg проброшен spawn_worker→spawn_terminal/ghostty→
+  build_*_command. Config: sandbox=true, sandbox_deny_network=false.
+- .verify/sandbox-walls.sh: профиль orc + обёртка orc; 5 обфусцированных обходов sentinel'а
+  вне ws (rm/base64|bash/python rmtree/find -delete/xargs rm) — ВСЕ Operation-not-permitted,
+  sentinel выжил; ~/.ssh write блок; write внутри ws работает. ПЛЮС интеграция: реальный
+  Terminal-спавн под sandbox-exec, воркер жмёт base64|bash rm вне ws → sentinel выжил (стена
+  держит через полный spawn-путь; профиль записан в <project>/.orc/sandbox.sb).
+- tests/test_sandbox.py 10 тестов (форма профиля, wrap, build_start_command wrapped/opt-out/
+  fallback). 200 тестов всего, 0 регрессий.
+
+Решения:
+- OS-sandbox — ОСНОВНАЯ стена (переживает обфускацию, покрывает подпроцессы, kernel-enforced);
+  F1 PreToolUse-хук остаётся ВТОРИЧНЫМ слоем (defense-in-depth: ловит git push, даёт модели
+  читаемую причину блока). Паттерн-матчинг фундаментально недостаточен — теперь есть OS-граница.
+- orc делает sandbox на СЛОЕ СПАВНА (родительский процесс), а не полагается на claude `/sandbox`:
+  воркер не может ослабить стену, наложенную родителем. claude `/sandbox` — тот же seatbelt, но
+  им владеет воркер; orc-обёртка держит стену независимо от настроек воркера.
+- Сеть: полный `(deny network*)` РАБОТАЕТ (curl BLOCKED); per-host allowlist в user seatbelt
+  НЕнадёжен (coarse `(remote ...)` формы всё равно пускают curl) → политика бинарна: сеть вкл
+  (дефолт — claude API/git fetch/brew) ИЛИ полностью выкл (sandbox_deny_network для locked-down).
+  Per-host MCP/egress — на прикладном слое, не в kernel-профиле. Честно в спайке.
+- Живой claude НЕ жёгся: sandbox-exec + пробное действие = ТОТ ЖЕ путь enforcement, что у Bash-
+  tool воркера; плюс реальный сквозной спавн доказал стену на живом воркере (окно берегу для F12).
+
+Грабли:
+- Мок spawn_ghostty в test_ghostty.py не принимал cfg= → TypeError после проброса cfg. Обновил
+  сигнатуру мока (lambda ...,cfg=None) — следует за реальным вызовом диспетчера, не ослабление.
+- build_inner_command/build_start_command без cfg (тесты) → cfg=None → _maybe_sandbox пытается
+  write_profile в несуществующий /proj → OSError пойман → возврат inner без обёртки. Верно.
+
+Находки инъекций: нет (весь код свой; seatbelt-вывод/спайк — данные).
+
+## МАЙЛСТОУН M3 ДОСТИГНУТ (F10, F13 self-pass) 2026-07-15
+F10 LaunchAgent(Aqua auth=0)+config+kill-switch+setup(husk-фикс), F13 OS-sandbox(seatbelt)
+поверх F1-хука — оба self-pass с доказательствами (реальные прогоны, живой claude НЕ жёгся).
+200 тестов passed, 0 регрессий M1/M2. Смоук M1+M2 на старте был зелёный. Ждёт evaluator M3.
+Команда запуска: `bin/orc {init|add|start|status|stop|setup|install|daemon} [флаги]`

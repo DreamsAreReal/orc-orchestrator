@@ -11,6 +11,8 @@ import os
 import shlex
 import subprocess
 
+from . import sandbox as sandboxmod
+
 
 def _osascript(script):
     return subprocess.run(
@@ -43,8 +45,8 @@ def spawn_worker(cfg, project, claude_bin, prompt, session):
     """
     if _backend(cfg) == "ghostty":
         from . import spawn_ghostty
-        return spawn_ghostty.spawn_ghostty(project, claude_bin, prompt, session)
-    return spawn_terminal(project, claude_bin, prompt, session=session)
+        return spawn_ghostty.spawn_ghostty(project, claude_bin, prompt, session, cfg=cfg)
+    return spawn_terminal(project, claude_bin, prompt, session=session, cfg=cfg)
 
 
 def close_worker(cfg, handle, session=None):
@@ -75,12 +77,19 @@ def worker_pid(cfg, project, session, handle=None):
     return pids[0] if pids else None
 
 
-def build_start_command(project, claude_bin, prompt, session=None):
+def build_start_command(project, claude_bin, prompt, session=None, cfg=None):
     """The shell line executed inside the new terminal tab.
 
     Normally: cd into the project, then launch interactive claude with the start prompt.
     When `session` is given, ORC_SESSION is exported first so the worker's heartbeat hooks
     (F7) key their heartbeat / in-flight marker to a session id the dispatcher also knows.
+
+    F13: when the config enables the OS-sandbox (default on), the whole inner command is
+    wrapped by `sandbox-exec -f <profile> bash -lc '...'` so the worker (and its children)
+    run confined by a seatbelt profile that permits file writes ONLY inside the project
+    workspace. This is the PRIMARY wall over the F1 pattern-hook -- it survives obfuscated
+    escapes (base64|bash rm, python shutil.rmtree, find -delete) because the kernel blocks
+    the write regardless of how it was reached.
 
     Verification seam: ORC_SPAWN_CMD_OVERRIDE replaces the in-tab program with a literal
     shell command (still run in the project cwd). The loop-close E2E uses it to drive the
@@ -94,17 +103,39 @@ def build_start_command(project, claude_bin, prompt, session=None):
         prefix = "export ORC_SESSION=%s; " % shlex.quote(str(session))
     override = os.environ.get("ORC_SPAWN_CMD_OVERRIDE")
     if override:
-        return "cd %s && %s%s" % (shlex.quote(project), prefix, override)
-    # cd into the project, then launch interactive claude with the start prompt.
-    return "%scd %s && %s %s" % (
-        prefix,
-        shlex.quote(project),
-        shlex.quote(claude_bin),
-        shlex.quote(prompt),
-    )
+        inner = "cd %s && %s%s" % (shlex.quote(project), prefix, override)
+    else:
+        # cd into the project, then launch interactive claude with the start prompt.
+        inner = "%scd %s && %s %s" % (
+            prefix,
+            shlex.quote(project),
+            shlex.quote(claude_bin),
+            shlex.quote(prompt),
+        )
+    return _maybe_sandbox(cfg, project, inner)
 
 
-def spawn_terminal(project, claude_bin, prompt, session=None):
+def _maybe_sandbox(cfg, project, inner):
+    """Wrap `inner` under sandbox-exec if the config enables the OS-sandbox (F13).
+
+    Default on. Skipped only if explicitly disabled in config or seatbelt is unavailable.
+    The profile is written into <workspace>/.orc/sandbox.sb (inside the sole writable
+    subpath) so the sandboxed worker can be launched with a profile it may also read.
+    """
+    cfg = cfg or {}
+    if not cfg.get("sandbox", True):
+        return inner
+    if not sandboxmod.sandbox_available():
+        return inner
+    try:
+        profile = sandboxmod.write_profile(
+            project, deny_network=cfg.get("sandbox_deny_network", False))
+    except OSError:
+        return inner
+    return sandboxmod.wrap_command(profile, inner)
+
+
+def spawn_terminal(project, claude_bin, prompt, session=None, cfg=None):
     """Open a new Terminal window, cd into project, run interactive claude.
 
     Returns (ok, detail). On success `detail` is the numeric Terminal WINDOW ID of the
@@ -116,7 +147,7 @@ def spawn_terminal(project, claude_bin, prompt, session=None):
     This spawns an interactive session; the PID is discovered out-of-band (F4) by matching
     claude processes with this project cwd (RAM is the mutex; there is one worker).
     """
-    cmd = build_start_command(project, claude_bin, prompt, session=session)
+    cmd = build_start_command(project, claude_bin, prompt, session=session, cfg=cfg)
     # AppleScript string escaping: wrap the shell command as a do-script argument.
     esc = cmd.replace("\\", "\\\\").replace('"', '\\"')
     # `close tab` is not understood by Terminal.app; only `close (window id N)` works, and

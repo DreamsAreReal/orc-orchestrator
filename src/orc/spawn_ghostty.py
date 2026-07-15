@@ -44,30 +44,34 @@ def _session_marker(session):
     return "ORC_SESSION=%s" % session
 
 
-def build_inner_command(project, claude_bin, prompt, session):
+def build_inner_command(project, claude_bin, prompt, session, cfg=None):
     """The shell program Ghostty runs via `-e bash -lc '<this>'`.
 
     Exports ORC_SESSION (heartbeat hooks + the find/kill handle), cd's into the project,
     then launches interactive claude. A verification seam (ORC_SPAWN_CMD_OVERRIDE) swaps
     the claude launch for a literal command so the spawn/identify/stop path is testable
-    without a real claude.
+    without a real claude. F13: wrapped under the OS-sandbox (seatbelt) when enabled, same
+    as the Terminal backend.
     """
     export = "export ORC_SESSION=%s; " % shlex.quote(str(session))
     override = os.environ.get("ORC_SPAWN_CMD_OVERRIDE")
     if override:
-        return "%scd %s && %s" % (export, shlex.quote(project), override)
-    return "%scd %s && exec %s %s" % (
-        export, shlex.quote(project), shlex.quote(claude_bin), shlex.quote(prompt))
+        inner = "%scd %s && %s" % (export, shlex.quote(project), override)
+    else:
+        inner = "%scd %s && exec %s %s" % (
+            export, shlex.quote(project), shlex.quote(claude_bin), shlex.quote(prompt))
+    from . import spawn as _spawn
+    return _spawn._maybe_sandbox(cfg, project, inner)
 
 
-def spawn_ghostty(project, claude_bin, prompt, session):
+def spawn_ghostty(project, claude_bin, prompt, session, cfg=None):
     """Open a Ghostty window running the worker. Returns (ok, detail).
 
     On success `detail` is the session marker (the stable handle used to stop the worker
     and, by exiting, close its window). Unlike Terminal there is no window id -- the marker
     is the identifier stored in shift.json as tab_id so close_ghostty can find it.
     """
-    inner = build_inner_command(project, claude_bin, prompt, session)
+    inner = build_inner_command(project, claude_bin, prompt, session, cfg=cfg)
     # open -na launches a NEW Ghostty instance/window with the -e command.
     argv = ["open", "-na", GHOSTTY_APP, "--args", "-e",
             "bash", "-lc", inner]

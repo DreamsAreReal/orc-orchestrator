@@ -11,7 +11,7 @@ Workspace: /Users/admin/orchestrator
 - [x] 1 RESEARCH — exit: RS-00/00b/00c (12+12+14 углов), RS-01+appendix, RS-02 (инвентарь патча), 7 проб PASS, критика 2 раунда (блокеры закрыты; 2 СУЩ — документальные, вносятся в ТЗ), синтез П1-П8 в STATE
 - [x] 2 ТЗ — Гейт ТЗ: УТВЕРЖДЕНО 2026-07-15T04:40:00+04:00 — режим: полный — чекпойнт после скелета: ДА (F1 = газета+canary)
 - [x] 3 DESIGN — design.md + ADR-0001/0002 + features.md (F1-F12, M1-M4) ПРИНЯТО critic-ом (2 раунда, финал ПРИНЯТО-С-ЗАМЕЧАНИЯМИ)
-- [ ] 4 BUILD (builder; счётчик майлстоунов: 3/4 — M1..M4) — M1+M2 verified (F1-F9,F14,F15; evaluator раунд 3 ПРИНЯТО, 175 тестов). Husk РЕШЁН: shellExitAction=0 на профиле Clear Dark (по выбору пользователя close-always) + orc setup делает это воспроизводимым (F10). M3: F10 self-pass (LaunchAgent Aqua auth=0, orc stop ≤10с, config-driven, orc setup husk-фикс; 190 тестов) → F13 OS-sandbox (в работе).
+- [ ] 4 BUILD (builder; счётчик майлстоунов: 3/4 — M1..M4) — M1+M2 verified (F1-F9,F14,F15; evaluator раунд 3 ПРИНЯТО, 175 тестов). Husk РЕШЁН: shellExitAction=0 на профиле Clear Dark (по выбору пользователя close-always) + orc setup делает это воспроизводимым (F10). M3 ДОСТИГНУТ: F10 self-pass (LaunchAgent Aqua auth=0, orc stop ≤10с, config-driven, orc setup husk-фикс) + F13 self-pass (OS-sandbox seatbelt блокирует 5 обфусцированных обходов на уровне ОС, доказано и юнитами, и реальным сквозным спавном; спайк .spikes/probe/sandbox.md); 200 тестов, 0 регрессий. Ждёт evaluator M3 → M4 (F11 патчи конвейера + F12 живой E2E).
 - [ ] 5 VERIFY (финал + ретро)
 Статусы завершения: DONE-WAVE-N (предложена волна N+1; НЕ конец) | BETA (нетерминальный, ждёт решения пользователя) | DONE (пользователь сказал «хватит»)
 
@@ -67,7 +67,8 @@ M3 = F10 (LaunchAgent автозапуск в GUI-сессии + config + kill s
 | F8 | Восстановление+lease | M2 | | self-pass | — |
 | F15 | Бэкенд-абстракция спавна (дефолт Terminal; Ghostty opt-in нераб.; 0-husk не достигнут) | M2 | | self-pass | R-M2 |
 | F9 | Гейт-протокол | M2 | ✓ | self-pass | — |
-| F10 | LaunchAgent+конфиг+killswitch | M3 | | todo | — |
+| F10 | LaunchAgent+конфиг+killswitch+setup(husk-фикс) | M3 | | self-pass | — |
+| F13 | OS-sandbox (seatbelt) поверх F1-хука | M3 | | self-pass | — |
 | F11 | Патчи конвейера+откат | M4 | | todo | — |
 | F12 | E2E-смена (владелец G1) | M4 | | todo | — |
 
