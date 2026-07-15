@@ -36,7 +36,14 @@ DEFAULTS = {
     "min_window_minutes": 5,       # admission: refuse spawn if window nearly closed
     "max_workers": 1,             # 8GB RAM -> one active worker (research finding)
     "restart_cap": 2,              # watchdog restart cap before escalation (F7)
-    "loop_hash_k": 4,              # watchdog: K identical heartbeat hashes = loop (F7)
+    "loop_hash_k": 4,              # watchdog: K identical heartbeat hashes in a row = loop (F7)
+    # P1: short-cycle meltdown detector (E3 fuzz: detect_loop misses A/B/A/B and A/B/C because
+    # they never have K identical hashes in a row). Over a window of the last N heartbeats, if
+    # the worker only ever issues <= loop_cycle_max_unique distinct tool calls it is churning
+    # in place, not progressing. A real worker's window has many distinct calls; a spin-loop's
+    # does not. external_progress still spares a worker making real disk changes (no false kill).
+    "loop_cycle_window": 8,        # heartbeats examined for the short-cycle signal
+    "loop_cycle_max_unique": 3,    # <= this many distinct calls across the window = a cycle
     "lease_ttl_seconds": 1800,     # F8: a worker whose lease is older than this AND whose
                                    #     PID is dead -> its task returns to ready (30 min)
     "gate_card_cap": 5,            # max gate cards approved in one batch (F9)

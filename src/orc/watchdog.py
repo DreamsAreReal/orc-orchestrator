@@ -199,13 +199,45 @@ def read_heartbeats(session):
 
 # --- detection (pure) -------------------------------------------------------- #
 def detect_loop(heartbeats, k):
-    """True if the last k heartbeat hashes are all identical (a tool-loop). k<=1 disables."""
+    """True if the last k heartbeat hashes are all identical (a tool-loop). k<=1 disables.
+
+    This is the STRICT signal (K identical in a row). It only catches the naive meltdown
+    that repeats one exact call. Alternation (A/B/A/B) and short rotations (A/B/C) slip
+    past it -- see detect_cycle for the window-entropy signal that catches those (P1 fix,
+    from E3 fuzz watchdog.py:201: "detect requires k CONSECUTIVE identical hashes").
+    """
     if not heartbeats or k is None or k <= 1:
         return False
     if len(heartbeats) < k:
         return False
     last = [h[2] for h in heartbeats[-k:]]
     return len(set(last)) == 1
+
+
+def detect_cycle(heartbeats, window, max_unique):
+    """True if the last `window` heartbeats cycle through <= `max_unique` distinct calls.
+
+    Catches the short-cycle meltdowns detect_loop misses (P1, from E3 fuzz): a spin-loop
+    that FLIPS between a handful of identical calls -- A/B/A/B/... or A/B/C rotation -- never
+    has K identical hashes in a row, so the strict detector says "not a loop" forever. Here
+    we look at a window of the last N heartbeats: if it is long enough (>= `window`) yet the
+    worker only ever issues at most `max_unique` distinct tool calls across the whole window,
+    it is churning in place, not progressing. A worker doing real work produces a stream of
+    DIFFERENT calls (edit this file, run that test, read the next module) -- its unique count
+    in a window of, say, 8 is well above 2-3.
+
+    window<=1 or max_unique<=0 disables. Requires at least `window` beats (do not fire early
+    on a short log). The false-positive guard is NOT here: supervise() still runs the EXTERNAL
+    post-condition check (external_progress) before any kill, so a worker that genuinely
+    changed files on disk is spared even if its heartbeat pattern looks cyclic -- real
+    progress wins over the heuristic (this is why a live tool is never falsely killed).
+    """
+    if not heartbeats or window is None or window <= 1 or max_unique is None or max_unique <= 0:
+        return False
+    if len(heartbeats) < window:
+        return False
+    last = [h[2] for h in heartbeats[-window:]]
+    return len(set(last)) <= max_unique
 
 
 def detect_silence(heartbeats, busy, now, silence_seconds):
@@ -236,6 +268,11 @@ def classify(session, cfg, now=None, silence_seconds=120, busy=None):
     beats = read_heartbeats(session)
     k = cfg.get("loop_hash_k", 4)
     if detect_loop(beats, k):
+        return VERDICT_LOOP
+    # short-cycle meltdown (A/B/A/B, A/B/C) that detect_loop misses (P1, E3 fuzz).
+    win = cfg.get("loop_cycle_window", 8)
+    mu = cfg.get("loop_cycle_max_unique", 3)
+    if detect_cycle(beats, win, mu):
         return VERDICT_LOOP
     if busy is None:
         busy, _ = in_flight(session, now=now, max_tool_seconds=silence_seconds * 4)

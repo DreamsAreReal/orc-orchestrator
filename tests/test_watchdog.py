@@ -70,6 +70,72 @@ def test_no_loop_below_k():
     assert watchdog.detect_loop(beats, k=4) is False
 
 
+# --------------------------------------------------------------------------- #
+# CYCLE detection (P1: short cycles detect_loop misses -- E3 fuzz)
+# --------------------------------------------------------------------------- #
+def test_detect_cycle_catches_alternation_ababab():
+    """E3 EVASION-1: A/B/A/B flips between 2 identical calls; detect_loop can't see it
+    (no K consecutive identical), but the window has only 2 distinct hashes -> a cycle."""
+    seq = [("Bash", "AAAA"), ("Bash", "BBBB")] * 10
+    beats = [(1000 + i, t, h) for i, (t, h) in enumerate(seq)]
+    assert watchdog.detect_loop(beats, k=4) is False            # strict detector misses it
+    assert watchdog.detect_cycle(beats, window=8, max_unique=3) is True
+
+
+def test_detect_cycle_catches_abc_rotation():
+    """E3 EVASION-2: A/B/C rotation -- 3 distinct calls churning, still a cycle."""
+    seq = [("Bash", "AAAA"), ("Bash", "BBBB"), ("Bash", "CCCC")] * 10
+    beats = [(1000 + i, t, h) for i, (t, h) in enumerate(seq)]
+    assert watchdog.detect_loop(beats, k=4) is False
+    assert watchdog.detect_cycle(beats, window=8, max_unique=3) is True
+
+
+def test_detect_cycle_does_not_fire_on_real_varied_work():
+    """A worker doing real work issues MANY distinct calls in a window -> NOT a cycle.
+    (Guard against false positives at the pure-detector level.)"""
+    seq = [("Edit", "e%d" % i) for i in range(8)]     # 8 distinct edits, all different
+    beats = [(1000 + i, t, h) for i, (t, h) in enumerate(seq)]
+    assert watchdog.detect_cycle(beats, window=8, max_unique=3) is False
+
+
+def test_detect_cycle_requires_full_window():
+    """Do not fire early: a short log below the window length is not judged."""
+    seq = [("Bash", "AAAA"), ("Bash", "BBBB")] * 2         # only 4 beats < window 8
+    beats = [(1000 + i, t, h) for i, (t, h) in enumerate(seq)]
+    assert watchdog.detect_cycle(beats, window=8, max_unique=3) is False
+
+
+def test_detect_cycle_disabled_by_config():
+    seq = [("Bash", "AAAA"), ("Bash", "BBBB")] * 10
+    beats = [(1000 + i, t, h) for i, (t, h) in enumerate(seq)]
+    assert watchdog.detect_cycle(beats, window=1, max_unique=3) is False
+    assert watchdog.detect_cycle(beats, window=8, max_unique=0) is False
+
+
+def test_classify_reports_loop_on_alternating_cycle(hb_home):
+    """End-to-end: an A/B/A/B spin-loop is now classified LOOP (was OK before P1)."""
+    for i in range(12):
+        cmd = "git status" if i % 2 == 0 else "git diff"
+        watchdog.record_heartbeat("cyc", "Bash", {"command": cmd}, now=3000 + i)
+    cfg = {"loop_hash_k": 4, "loop_cycle_window": 8, "loop_cycle_max_unique": 3}
+    v = watchdog.classify("cyc", cfg, now=3020, busy=False)
+    assert v == watchdog.VERDICT_LOOP
+
+
+def test_supervise_spares_cyclic_worker_that_is_progressing(monkeypatch):
+    """False-kill guard holds for cycles too: a cyclic-looking worker that ACTUALLY changed
+    files on disk is spared by the external post-condition check, not killed."""
+    st = _state_with_worker()
+    closed = []
+    monkeypatch.setattr(watchdog, "external_progress", lambda p, since_epoch=None: True)
+    from orc import spawn as spawnmod
+    monkeypatch.setattr(spawnmod, "close_worker",
+                        lambda cfg, tab, session=None: closed.append(tab))
+    actions = watchdog.supervise({"restart_cap": 2}, "hub", st,
+                                 verdicts={"t1": watchdog.VERDICT_LOOP})
+    assert actions[0]["action"] == "spared" and closed == []
+
+
 def test_classify_reports_loop(hb_home):
     same = watchdog.arg_hash("Bash", {"command": "git status"})
     for i in range(4):
