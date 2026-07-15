@@ -18,10 +18,12 @@ def _osascript(script):
     )
 
 
-def build_start_command(project, claude_bin, prompt):
+def build_start_command(project, claude_bin, prompt, session=None):
     """The shell line executed inside the new terminal tab.
 
     Normally: cd into the project, then launch interactive claude with the start prompt.
+    When `session` is given, ORC_SESSION is exported first so the worker's heartbeat hooks
+    (F7) key their heartbeat / in-flight marker to a session id the dispatcher also knows.
 
     Verification seam: ORC_SPAWN_CMD_OVERRIDE replaces the in-tab program with a literal
     shell command (still run in the project cwd). The loop-close E2E uses it to drive the
@@ -30,18 +32,22 @@ def build_start_command(project, claude_bin, prompt):
     does not hinge on live-model latency or an exhausted usage window. Not used in real
     shifts (the dispatcher always passes a claude prompt).
     """
+    prefix = ""
+    if session:
+        prefix = "export ORC_SESSION=%s; " % shlex.quote(str(session))
     override = os.environ.get("ORC_SPAWN_CMD_OVERRIDE")
     if override:
-        return "cd %s && %s" % (shlex.quote(project), override)
+        return "cd %s && %s%s" % (shlex.quote(project), prefix, override)
     # cd into the project, then launch interactive claude with the start prompt.
-    return "cd %s && %s %s" % (
+    return "%scd %s && %s %s" % (
+        prefix,
         shlex.quote(project),
         shlex.quote(claude_bin),
         shlex.quote(prompt),
     )
 
 
-def spawn_terminal(project, claude_bin, prompt):
+def spawn_terminal(project, claude_bin, prompt, session=None):
     """Open a new Terminal window, cd into project, run interactive claude.
 
     Returns (ok, detail). On success `detail` is the numeric Terminal WINDOW ID of the
@@ -53,7 +59,7 @@ def spawn_terminal(project, claude_bin, prompt):
     This spawns an interactive session; the PID is discovered out-of-band (F4) by matching
     claude processes with this project cwd (RAM is the mutex; there is one worker).
     """
-    cmd = build_start_command(project, claude_bin, prompt)
+    cmd = build_start_command(project, claude_bin, prompt, session=session)
     # AppleScript string escaping: wrap the shell command as a do-script argument.
     esc = cmd.replace("\\", "\\\\").replace('"', '\\"')
     # `close tab` is not understood by Terminal.app; only `close (window id N)` works, and

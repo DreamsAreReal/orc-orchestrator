@@ -513,7 +513,9 @@ def spawn_one(cfg, hub, state, task):
 
     prompt = start_prompt(project, slug, text)
     tokens_before = probes.total_tokens_now()
-    ok, detail = spawn.spawn_terminal(project, cfg["claude_bin"], prompt)
+    # session = task_id: the worker's heartbeat hooks (F7) key their log/marker to this id
+    # via ORC_SESSION, so the watchdog reads the same session the dispatcher spawned.
+    ok, detail = spawn.spawn_terminal(project, cfg["claude_bin"], prompt, session=task_id)
     if not ok:
         beads.set_status(hub, task_id, "open")
         shiftmod.mark_failed(state, task_id, "spawn failed: %s" % detail)
@@ -525,7 +527,7 @@ def spawn_one(cfg, hub, state, task):
     tab_id = detail
     pids = spawn.worker_pids(project)
     pid = pids[0] if pids else None
-    shiftmod.add_worker(state, pid=pid, session="window id %s" % tab_id, project=project,
+    shiftmod.add_worker(state, pid=pid, session=task_id, project=project,
                         task=task_id, phase="build", tokens_before=tokens_before,
                         tab_id=tab_id)
     return True, S.START_SPAWNED.format(id=task_id, project=project, tab=tab_id), state

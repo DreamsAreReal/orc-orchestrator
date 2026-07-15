@@ -102,6 +102,13 @@ PARK_SHIFT_BUDGET = (
     "shift token cap reached ({spent} >= cap {cap}); not starting new tasks."
 )
 
+# --- watchdog (F7) escalation (en; operator terminal) ---
+WATCHDOG_ESCALATE = (
+    "parked: watchdog hit the restart cap ({cap}) after repeated {verdict}; "
+    "escalating to you. The worker made no real progress (external check) -- "
+    "inspect the task before resuming."
+)
+
 
 # --- Canary check labels (en; operational preflight report) ---
 CANARY_HEADER = "=== canary preflight ==="

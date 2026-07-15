@@ -98,11 +98,15 @@ North Star: утром накидал ~10 задач по проектам — M
 Ворота: G5. Опыт/ценность: выход из meltdown/зависаний без ложных убийств.
 Что: heartbeat из PostToolUse; PreToolUse-маркер «tool-in-flight» отличает работу от тишины. Петля (K=конфиг одинаковых hash) / тишина-без-маркера → внешняя проверка пост-условий (git/артефакты) → kill → рестарт от STATE.md, cap=конфиг → эскалация.
 Приёмка:
-- [ ] синтетическая петля (K одинаковых hash) и тишина-без-маркера детектятся (G5)
-- [ ] живой Bash-вызов ≥2 мин НЕ убивается (0 ложных kill)
-- [ ] рестарт только после внешней проверки пост-условий; cap соблюдается → эскалация
+- [x] синтетическая петля (K одинаковых hash) и тишина-без-маркера детектятся (G5)
+- [x] живой Bash-вызов ≥2 мин НЕ убивается (0 ложных kill)
+- [x] рестарт только после внешней проверки пост-условий; cap соблюдается → эскалация
 Проверка: `python3 -m pytest tests/test_watchdog.py`
-Статус: todo
+Статус: self-pass
+Доказательство:
+- `bash .verify/watchdog.sh` → "F7 WATCHDOG PASS (loop + silence detected; long tool spared = 0 false kills; restart bounded, cap escalates)", exit 0. Синтетика (без claude): 4 одинаковых hash→LOOP; heartbeat 300с назад без маркера→SILENCE; маркер in-flight держится 200с (=живой Bash ≥2мин)→verdict OK (0 ложных kill); no-progress→restart, real-progress→spared, cap=2→escalate. Лог: docs/evidence/F7/watchdog.log
+- `python3 -m pytest tests/test_watchdog.py` → 18 passed (heartbeat/marker×2, loop×4, silence+false-kill-guard×5, external-check×2, bounded-recovery×5). Лог: docs/evidence/F7/unit-tests.log
+- heartbeat-хуки встроены в worker settings.json (PreToolUse marker + PostToolUse heartbeat, merge не затирает чужие хуки); ORC_SESSION=task_id связывает хук воркера и watchdog диспетчера; 142 теста, 0 регрессий.
 
 ### F8 — Восстановление диспетчера + lease TTL [M2]
 Ворота: G6. Опыт/ценность: безнадзорная надёжность после падения.

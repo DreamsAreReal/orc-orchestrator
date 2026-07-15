@@ -54,6 +54,20 @@ def head_rev(repo):
     return out.strip() if rc == 0 else None
 
 
+def head_commit_epoch(repo):
+    """Unix epoch (int) of the HEAD commit's committer date, or None.
+
+    Used by the watchdog external post-condition check (F7): a commit newer than the
+    worker's start time is real, on-disk progress -- not a self-reported claim."""
+    rc, out, _ = _git(repo, "log", "-1", "--format=%ct")
+    if rc != 0:
+        return None
+    try:
+        return int(out.strip())
+    except ValueError:
+        return None
+
+
 def product_layer_rev(repo, product_dir="docs"):
     """A cheap fingerprint of the product layer (docs/) so we can detect changes
     between task-brief approval and claim (re-validate, risk R5). Returns the last

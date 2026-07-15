@@ -234,3 +234,37 @@ F5 → F6 → F7 → F8 → F15 → F9. Живой claude — только на 
   для матчинга газеты держу как литералы (файл .verify, не .py — хук ругается косметически).
 
 Находки инъекций: нет.
+
+## F7 — Watchdog: петля/тишина + внешняя проверка + огранич. восстановление — self-pass 2026-07-15
+
+Сделано:
+- Новый watchdog.py. Heartbeat-провод: PostToolUse-хук пишет «<epoch> <tool> <arg-hash>» в
+  ~/.orc/hb/<session>.log + чистит маркер; PreToolUse-хук пишет ~/.orc/hb/<session>.inflight
+  (tool-in-flight). arg_hash = sha1(tool|sorted-args)[:12] — одинаковый tool+args → одинаковый hash.
+- Детекторы (чистые): detect_loop (последние K hash идентичны, K из конфига); detect_silence
+  (тишина > порога И НЕ busy). Гард ложных убийств: busy=True (маркер in-flight) НИКОГДА не тишина
+  → живой длинный tool (≥2мин) не убивается. Стейл-маркер (воркер умер mid-tool) старше bound
+  игнорируется — тишина всё равно срабатывает.
+- external_progress(): РЕАЛЬНАЯ проверка на диске (git-коммит новее старта ИЛИ грязное дерево
+  не-наше), НЕ самоотчёт воркера (анти-галлюцинация P6). Добавлен gitutil.head_commit_epoch.
+- supervise(): на LOOP/SILENCE → внешняя проверка → progressing? spared : kill+cap. Под капом
+  → restart (bd reopen, свежий рестарт от STATE.md, drop мёртвого воркера); cap достигнут →
+  escalate (park + bd blocked). restart_cap из конфига.
+- Хуки heartbeat merge в worker settings.json (_merge_hook_events, идемпотентно, чужие хуки целы).
+  ORC_SESSION=task_id экспортируется в spawn-команде → хук воркера и watchdog диспетчера видят
+  один session. spawn_terminal(session=) прокинут.
+- .verify/watchdog.sh + _watchdog_check.py (синтетика). 18 тестов, 142 всего, 0 регрессий.
+
+Решения:
+- Тишина vs работа = маркер in-flight, НЕ таймаут: длинный build держит маркер → busy → не тишина.
+  Это и есть «0 ложных kill» на ≥2мин Bash (доказано в .verify: маркер 200с → verdict OK).
+- Kill ТОЛЬКО после external_progress=False: реальный прогресс перевешивает эвристику петли (spared).
+- session = task_id (не «window id N»): стабильный ключ, известен и хуку (через env), и диспетчеру.
+
+Грабли:
+- Регресс M1: 2 теста (mutex, loop-close) мокали spawn_terminal 3-арг лямбдой + не мокали
+  RAM/окно → после добавления session= и admission-гейта TypeError/park. Починил: session=None
+  в мок-лямбдах + мок free_ram/ccusage healthy. НЕ ослабление — эволюция сигнатуры+нового гейта.
+- Heredoc в .sh с python-инлайном ломался на «)» → вынес драйвер в .verify/_watchdog_check.py.
+
+Находки инъекций: нет.

@@ -159,9 +159,13 @@ def test_spawn_records_window_id_not_none(tmp_path, monkeypatch):
     monkeypatch.setattr(dispatcher, "prepare_worker_walls", lambda cfg, p: ("x", False))
     monkeypatch.setattr(dispatcher.probes, "total_tokens_now", lambda: 0)
     monkeypatch.setattr(dispatcher, "revalidate", lambda p, t: None)
+    # admission (F5): keep RAM/window healthy so the gate admits deterministically
+    monkeypatch.setattr(dispatcher.probes, "free_ram_mb", lambda: 4000)
+    monkeypatch.setattr(dispatcher.probes, "ccusage_window",
+                        lambda: {"active": True, "remaining_minutes": 200})
     # spawn_terminal returns the window id string as `detail`
     monkeypatch.setattr(dispatcher.spawn, "spawn_terminal",
-                        lambda project, cbin, prompt: (True, "4242"))
+                        lambda project, cbin, prompt, session=None: (True, "4242"))
     monkeypatch.setattr(dispatcher.spawn, "worker_pids", lambda p: [])
 
     cfg = {"claude_bin": "/bin/true", "mcp_allowlist": []}

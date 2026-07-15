@@ -282,6 +282,27 @@ def _merge_hooks(existing, walls):
     return merged
 
 
+def _merge_hook_events(existing, blocks):
+    """Merge multiple hook-event blocks ({event: [block,...]}) into an existing hooks dict.
+
+    Idempotent per command string: a block whose command already appears under its event
+    is not duplicated. Preserves the user's / pipeline's own hooks (F7 heartbeat merge)."""
+    merged = dict(existing) if isinstance(existing, dict) else {}
+    for event, new_blocks in (blocks or {}).items():
+        cur = list(merged.get(event, []))
+        existing_cmds = set()
+        for blk in cur:
+            for h in (blk.get("hooks") or []):
+                existing_cmds.add(h.get("command"))
+        for blk in new_blocks:
+            cmds = [h.get("command") for h in (blk.get("hooks") or [])]
+            if any(c in existing_cmds for c in cmds):
+                continue
+            cur.append(blk)
+        merged[event] = cur
+    return merged
+
+
 def stripped_env(base_env=None, denylist=None):
     """Return a copy of the environment with secret-denylist vars removed."""
     env = dict(base_env if base_env is not None else os.environ)
@@ -303,6 +324,10 @@ def generate_worker_settings(workspace, mcp_allowlist=None, secret_denylist=None
     base = dict(existing_settings) if isinstance(existing_settings, dict) else {}
 
     base["hooks"] = _merge_hooks(base.get("hooks", {}), walls)
+    # F7 watchdog heartbeat: PreToolUse marker + PostToolUse heartbeat, merged without
+    # dropping the user's / pipeline's own hooks (idempotent per command string).
+    from . import watchdog as _wd
+    base["hooks"] = _merge_hook_events(base.get("hooks", {}), _wd.heartbeat_hook_blocks())
 
     # Also declare a permissions.deny set as defense-in-depth (honored in non-bypass
     # modes; the hook is the real wall under bypassPermissions).

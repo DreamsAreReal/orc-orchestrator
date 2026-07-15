@@ -122,8 +122,12 @@ def test_mutex_refuses_second_same_project(tmp_path, monkeypatch):
     monkeypatch.setattr(dispatcher.beads, "show", lambda *a, **k: None)
     monkeypatch.setattr(dispatcher, "prepare_worker_walls", lambda cfg, p: ("x", False))
     monkeypatch.setattr(dispatcher.probes, "total_tokens_now", lambda: 0)
+    # admission (F5): healthy RAM/window so the gate admits (mutex is the thing under test)
+    monkeypatch.setattr(dispatcher.probes, "free_ram_mb", lambda: 4000)
+    monkeypatch.setattr(dispatcher.probes, "ccusage_window",
+                        lambda: {"active": True, "remaining_minutes": 200})
     monkeypatch.setattr(dispatcher.spawn, "spawn_terminal",
-                        lambda p, c, prompt: (spawned.append(p) or (True, "tab 1")))
+                        lambda p, c, prompt, session=None: (spawned.append(p) or (True, "tab 1")))
     monkeypatch.setattr(dispatcher.spawn, "worker_pids", lambda p: [99999])
 
     task_a = {"id": "a", "metadata": {"project": repo, "slug": "a", "text": "A"}}
