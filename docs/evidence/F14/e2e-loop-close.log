@@ -1,47 +1,47 @@
 === F14 close-the-loop E2E ===
-date: Wed Jul 15 12:17:58 +04 2026
-orc_home: /tmp/orc-loop-home.Xj1ptK
-project:  /tmp/orc-loop-proj.VAbUQr
+date: Wed Jul 15 12:44:28 +04 2026
+orc_home: /tmp/orc-loop-home.KD2RyA
+project:  /tmp/orc-loop-proj.RyChzv
 
 computed task slug: create-the-file-docs-hi-txt
-dispatcher will poll: /tmp/orc-loop-proj.VAbUQr/docs/tasks/create-the-file-docs-hi-txt/STATE.md
+dispatcher will poll: /tmp/orc-loop-proj.RyChzv/docs/tasks/create-the-file-docs-hi-txt/STATE.md
 
 --- orc init ---
-orc hub initialized at /tmp/orc-loop-home.Xj1ptK (beads queue ready inside .beads/)
+orc hub initialized at /tmp/orc-loop-home.KD2RyA (beads queue ready inside .beads/)
 
 --- orc add ---
-added task orc-loop-home_Xj1ptK-coa -> /tmp/orc-loop-proj.VAbUQr
+added task orc-loop-home_KD2RyA-8zi -> /tmp/orc-loop-proj.RyChzv
 
 --- orc start (REAL Terminal spawn; deterministic in-tab worker via seam) ---
 === canary preflight ===
-[ ok ] bd: bd on PATH, queue at /tmp/orc-loop-home.Xj1ptK/.beads
+[ ok ] bd: bd on PATH, queue at /tmp/orc-loop-home.KD2RyA/.beads
 [ ok ] auth: loggedIn via /opt/homebrew/bin/claude
-[ ok ] ccusage: window active, 282 min remaining
+[ ok ] ccusage: window active, 255 min remaining
 [ ok ] notify: osascript available
-[ ok ] ram: 2517 MB free (>= 400)
+[ ok ] ram: 1935 MB free (>= 400)
 canary: all preflight checks passed; shift starting
-spawned worker for orc-loop-home_Xj1ptK-coa in /tmp/orc-loop-proj.VAbUQr (Terminal window id 4956)
+spawned worker for orc-loop-home_KD2RyA-8zi in /tmp/orc-loop-proj.RyChzv (Terminal window id 5312)
 
-recorded worker tab_id (shift.json): 4956
+recorded worker tab_id (shift.json): 5312
 TAB-ID PASS: shift.json recorded a real Terminal window id.
-worker tty: /dev/ttys008
+worker tty: /dev/ttys003
 
 --- polling 'orc status' up to 300s until the shift reports done (NO manual ls) ---
 shift reported DONE after ~4s (via status polling STATE.md, no manual ls).
 
 --- final newspaper (proof the digest shows the completion) ---
-смена: 1 готово, 0 ждут тебя, 0 упало; съедено 6% окна
+смена: 1 готово, 0 ждут тебя, 0 упало; съедено 15% окна
 СМЕНА orc
 
 ── завершено ──
-  ✓ orc-loop-home_Xj1ptK-coa  готово  ~0 ток.
+  ✓ orc-loop-home_KD2RyA-8zi  готово  ~0 ток.
 
 newspaper reports at least one done: yes
 NEWSPAPER-CATCHUP PASS: the shift newspaper reached '1 done' on its own (loop closed).
 
 --- worker stopped by the dispatcher (tab closed = worker terminated, RAM freed)? ---
-live processes still on worker tty /dev/ttys008: 0
-worker window still present (cosmetic; profile-dependent): true
+live processes still on worker tty /dev/ttys003: 0
+worker window still present (cosmetic; profile-dependent): false
 WORKER-STOPPED PASS: dispatcher terminated the worker on loop close (RAM freed).
 
 === RESULT ===

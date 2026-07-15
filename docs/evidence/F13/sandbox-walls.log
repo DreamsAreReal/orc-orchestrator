@@ -1,10 +1,10 @@
-generated profile: /private/tmp/orc-f13-ws.aXb9Og/.orc/sandbox.sb
+generated profile: /private/tmp/orc-f13-ws.YNvKeZ/.orc/sandbox.sb
 --- profile contents ---
 (version 1)
 (allow default)
 (deny file-write*)
 (allow file-write*
-  (subpath "/private/tmp/orc-f13-ws.aXb9Og"))
+  (subpath "/private/tmp/orc-f13-ws.YNvKeZ"))
 (allow file-write-data (literal "/dev/null") (literal "/dev/stdout") (literal "/dev/stderr") (literal "/dev/tty"))
 
 === A direct rm outside ws ===
@@ -31,7 +31,7 @@ rm: /Users/admin/orc-f13-probe-out/sentinel.txt: Operation not permitted
 bash: /Users/admin/.ssh/orc_f13_probe: Operation not permitted
   RESULT: ~/.ssh write BLOCKED by OS-sandbox [ok]
 === control write inside ws ===
-  inner : echo ok > '/tmp/orc-f13-ws.aXb9Og/inside.txt'
+  inner : echo ok > '/tmp/orc-f13-ws.YNvKeZ/inside.txt'
   RESULT: write inside workspace works [ok] (sandbox is not a brick wall)
 
 === RESULT ===

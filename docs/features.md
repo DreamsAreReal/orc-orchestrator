@@ -143,7 +143,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] все калибровки из config.json (нет хардкода)
 - [x] ДОБАВЛЕНО: `orc setup` ставит shellExitAction=0 на Terminal-профиль (plistlib) с бэкапом прежнего значения — воспроизводимый husk-фикс для любого пользователя (README)
 Проверка: `bash .verify/launchagent.sh` + `python3 -m pytest tests/test_config.py`
-Статус: self-pass
+Статус: verified
 Доказательство:
 - `bash .verify/launchagent.sh` → "F10 LAUNCHAGENT PASS", exit 0. PART 1: РЕАЛЬНЫЙ user LaunchAgent (Aqua) → `claude auth status` auth_exit=0 (loggedIn:true, max), keychain_exit=0, PATH из plist, claude по абсолютному пути; ОБЯЗАТЕЛЬНЫЙ teardown (bootout+rm plist) — 0 residue. PART 2: `orc stop` за 1.24с (≤10с) остановил воркера (0 процессов на tty, RAM свободна) + задача вернулась в ready. PART 3: config.json override (stop_grace=9, min_ram=777, label) honoured — нет хардкода. Лог: docs/evidence/F10/{launchagent.log, la-probe.log, stop.json}
 - `python3 -m pytest tests/test_config.py` → 15 passed (config-override/malformed-fallback×3, plist Aqua/PATH/absolute/label×5, orc stop kill+requeue×3, setup shellExitAction=0+backup+revert+idempotent×4). Лог: docs/evidence/F10/unit-tests.log
@@ -191,7 +191,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] обфусцированные обходы (base64|bash rm вне ws, python -c shutil.rmtree, find вне ws -delete) ЗАБЛОКИРОВАНЫ sandbox (evidence/F13/)
 - [x] запись вне workspace невозможна на уровне ОС, не только hook
 Проверка: `bash .verify/sandbox-walls.sh` (расширенный негативный спайк) + вывод в evidence/F13/
-Статус: self-pass
+Статус: verified
 Доказательство:
 - СПАЙК `.spikes/probe/sandbox.md` (правило спайка ДО фикса): macOS seatbelt (`sandbox-exec` + профиль deny-file-write* + allow только subpath workspace) блокирует обфусцированные обходы на уровне syscall (независимо от того, как достигнута запись); ключевая находка профиля — НЕ вайтлистить широкий родитель (мой первый профиль пустил /private/tmp = ложная течь). Сеть: полный `(deny network*)` работает; per-host allowlist в user seatbelt ненадёжен — задокументировано (дефолт: сеть вкл, git push держит F1-хук).
 - `bash .verify/sandbox-walls.sh` → "F13 SANDBOX PASS", exit 0. Профиль orc (`sandbox.write_profile`) + обёртка (`sandbox.wrap_command`); 5 обфусцированных обходов sentinel'а ВНЕ workspace (rm / base64|bash / python shutil.rmtree / find -delete / xargs rm) — ВСЕ заблокированы (Operation not permitted, sentinel выжил); запись в ~/.ssh заблокирована; запись ВНУТРИ workspace работает. Лог: docs/evidence/F13/sandbox-walls.log
