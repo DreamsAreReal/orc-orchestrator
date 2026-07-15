@@ -1,0 +1,22 @@
+=== F5 admission + back-pressure ===
+date: Wed Jul 15 07:09:53 +04 2026
+
+--- limit-string classification on real CLI fixtures ---
+  [PASS] limit-session.txt    -> session/park/reset=3:45pm
+  [PASS] limit-weekly.txt     -> weekly/park/reset=Mon 12:00am
+  [PASS] limit-opus.txt       -> opus/degrade/reset=3:45pm
+  [PASS] limit-429.txt        -> 429/retry/reset=None
+  [PASS] limit-529.txt        -> 529/retry/reset=None
+  [PASS] limit-none.txt       -> None
+CLASSIFY_FAILS=0
+
+--- admission gate decisions ---
+  [PASS] all green -> admit                 ok=True reason=None
+  [PASS] no ready -> refuse                 ok=False reason=no-ready
+  [PASS] low ram -> refuse (no spawn)       ok=False reason=low-ram
+  [PASS] window closed -> refuse            ok=False reason=window-low
+  [PASS] session limit -> park              ok=False reason=limit-session
+GATE_FAILS=0
+
+=== RESULT ===
+F5 ADMISSION PASS (6/6 fixtures classified + admission gate correct on RAM/window/limit).

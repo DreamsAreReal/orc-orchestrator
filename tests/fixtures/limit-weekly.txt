@@ -1,0 +1,3 @@
+Worker progressing through the pipeline.
+You've hit your weekly limit · resets Mon 12:00am
+This is the shared weekly cap across all models; deeper back-pressure.

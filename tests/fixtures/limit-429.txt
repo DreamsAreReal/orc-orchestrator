@@ -1,0 +1,3 @@
+Worker mid-call.
+API Error: Request rejected (429) · this may be a temporary capacity issue. If it persists, check https://status.claude.com.
+Temporary throttle; retry without parking.

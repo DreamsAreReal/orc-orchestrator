@@ -68,6 +68,31 @@ REVALIDATE_NOTE = (
 )
 PARK_ON_GATE = "task reached a gate; waiting for your answer (see the gate card)"
 
+# --- admission / back-pressure (F5) reasons (en; operator terminal) ---
+PARK_LOW_RAM = (
+    "parked: not enough free RAM to spawn a worker safely "
+    "({ram} MB free < {min} MB). Waiting for memory to free up."
+)
+PARK_WINDOW_LOW = (
+    "parked: the usage window is nearly closed ({rem} min left < {min} min). "
+    "Waiting for the next 5-hour block."
+)
+PARK_LIMIT_SESSION = (
+    "parked: session (5-hour) usage limit hit; resets {reset}. "
+    "Holding the task until the window reopens."
+)
+PARK_LIMIT_WEEKLY = (
+    "parked: weekly usage limit hit (shared across all models); resets {reset}. "
+    "Deep back-pressure until the weekly window reopens."
+)
+DEGRADE_OPUS = (
+    "note: Opus usage limit hit; resets {reset}. Only Opus is capped -- other models "
+    "still work (degradation event, not a hard stop)."
+)
+RETRY_TRANSIENT = (
+    "transient {kind} throttle; retrying without parking (not a usage-limit stop)."
+)
+
 
 # --- Canary check labels (en; operational preflight report) ---
 CANARY_HEADER = "=== canary preflight ==="

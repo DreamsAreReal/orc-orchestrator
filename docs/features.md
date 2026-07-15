@@ -69,10 +69,15 @@ North Star: утром накидал ~10 задач по проектам — M
 Ворота: G4, G12. Опыт/ценность: тратить недоиспользуемый пул безопасно.
 Что: перед spawn — `ccusage blocks --active --json` (окно) + free-RAM + детект лимит-строк CLI. session/weekly/Opus → парковка до ресета (парс времени); 429/529 → ретрай без парковки.
 Приёмка:
-- [ ] фикстуры лимит-строк: session→парковка+время ресета, weekly→глубокая, Opus→деградация, 429→ретрай (100% фикстур) (G4)
-- [ ] допуск: ready≠∅ + окно/RAM ok → spawn ≤60 сек; нехватка RAM → не спавнит (G12)
+- [x] фикстуры лимит-строк: session→парковка+время ресета, weekly→глубокая, Opus→деградация, 429→ретрай (100% фикстур) (G4)
+- [x] допуск: ready≠∅ + окно/RAM ok → spawn ≤60 сек; нехватка RAM → не спавнит (G12)
 Проверка: `python3 -m pytest tests/test_admission.py` (фикстуры tests/fixtures/limit-*.txt)
-Статус: todo
+Статус: self-pass
+Доказательство:
+- `bash .verify/admission.sh` → "F5 ADMISSION PASS (6/6 fixtures classified + admission gate correct on RAM/window/limit)", exit 0. 6 РЕАЛЬНЫХ лимит-строк CLI (code.claude.com/docs/en/errors): session→park+reset 3:45pm, weekly→park+reset Mon 12:00am, Opus→degrade, 429/529→retry (no park), none→no-limit. Лог: docs/evidence/F5/admission.log
+- `python3 -m pytest tests/test_admission.py` → 23 passed (классификация×7, парс ресет-времени×4, гейт RAM/окно/ready/limit×12). Лог: docs/evidence/F5/unit-tests.log
+- интеграция в dispatcher: `python3 -m pytest tests/test_dispatcher.py` → 14 passed (11 F4 + 3 admission: low-ram→park без claim, ram/window ok→spawn, session-limit→park). Лог: docs/evidence/F5/dispatcher-tests.log
+- fixtures: tests/fixtures/limit-{session,weekly,opus,429,529,none}.txt
 
 ### F6 — Бюджет-кап + per-задачная атрибуция расхода [M2]
 Ворота: G8, контр-метрика «расход». Опыт/ценность: не сжечь weekly-кап; газета показывает «сколько съела задача».

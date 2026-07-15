@@ -1,0 +1,4 @@
+Some earlier worker output on stdout.
+Running tools, editing files, all normal.
+You've hit your session limit · resets 3:45pm
+The session has stopped because the 5-hour usage window is exhausted.

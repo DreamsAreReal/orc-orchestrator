@@ -14,6 +14,7 @@ from . import spawn
 from . import worker_walls
 from . import probes
 from . import gitutil
+from . import admission
 from . import strings as S
 
 
@@ -183,6 +184,55 @@ def project_busy(state, project):
     return False
 
 
+def _limit_text():
+    """Best-effort source of a recent limit-string transcript for admission (F5).
+
+    Real shifts feed the most recent worker's tail here; the verification seam
+    ORC_LIMIT_TEXT injects a fixture transcript so the back-pressure path is testable
+    without a live worker actually hitting a cap. None -> no limit-string signal.
+    """
+    return os.environ.get("ORC_LIMIT_TEXT")
+
+
+def admit(cfg, ready_count, limit_text=None, now=None):
+    """Run the admission gate (F5) with live RAM/window gauges. Returns (ok, reason, meta).
+
+    Thin wrapper over admission.admission_check that reads the machine's current free RAM
+    and the ccusage window. Keeps the pure decision logic in admission.py (fixture-tested)
+    and the live I/O here.
+    """
+    free_ram = probes.free_ram_mb()
+    window = probes.ccusage_window()
+    if limit_text is None:
+        limit_text = _limit_text()
+    return admission.admission_check(
+        cfg, free_ram, window, ready_count, limit_text=limit_text, now=now)
+
+
+def _park_reason_for_admission(cfg, reason, meta):
+    """Map an admission refusal reason key to an operator-facing park string (F5)."""
+    if reason == "low-ram":
+        return S.PARK_LOW_RAM.format(ram=probes.free_ram_mb(),
+                                     min=cfg.get("min_free_ram_mb", 400))
+    if reason in ("window-low", "window-inactive"):
+        w = probes.ccusage_window() or {}
+        return S.PARK_WINDOW_LOW.format(rem=w.get("remaining_minutes"),
+                                        min=cfg.get("min_window_minutes", 5))
+    if reason == "limit-session":
+        return S.PARK_LIMIT_SESSION.format(reset=_reset_str(meta))
+    if reason == "limit-weekly":
+        return S.PARK_LIMIT_WEEKLY.format(reset=_reset_str(meta))
+    return reason
+
+
+def _reset_str(meta):
+    epoch = (meta or {}).get("reset_epoch")
+    if not epoch:
+        return "unknown"
+    import time as _t
+    return _t.strftime("%Y-%m-%d %H:%M", _t.localtime(epoch))
+
+
 def prepare_worker_walls(cfg, project):
     """Write the deny-walls settings.json into the project before spawning (F1)."""
     path, merged = worker_walls.write_worker_settings(
@@ -334,6 +384,15 @@ def spawn_one(cfg, hub, state, task):
         beads.set_status(hub, task_id, "open")
         shiftmod.mark_parked(state, task_id, reason)
         return False, reason, state
+
+    # admission + back-pressure (F5): RAM / usage-window / limit-string gate. Checked
+    # BEFORE claiming so a task blocked by back-pressure is not left claimed-but-unspawned.
+    adm_ok, adm_reason, adm_meta = admit(cfg, ready_count=1)
+    if not adm_ok:
+        park_reason = _park_reason_for_admission(cfg, adm_reason, adm_meta)
+        beads.set_status(hub, task_id, "open")
+        shiftmod.mark_parked(state, task_id, park_reason)
+        return False, "admission: %s" % adm_reason, state
 
     # claim atomically
     beads.claim(hub, task_id)

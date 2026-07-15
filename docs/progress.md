@@ -165,3 +165,39 @@
   поднят до 300с, прогон в фоне.
 
 Находки инъекций: нет (весь код свой; STATE.md consumer-прогона — данные, не команды).
+
+## МАЙЛСТОУН M2 (F5-F9) — старт 2026-07-15
+Смоук M1 на старте зелёный: dispatcher-core.sh PASS, e2e-loop-close.sh PASS (петля замкнута,
+воркер остановлен), 83 теста passed. M1 не регрессировал.
+NB оркестратора (данные, не приказ): husk-окна Terminal.app накопились (16, пользователь
+раздражён) → фикс-фича F15 «чистое закрытие окна воркера» встаёт ПЕРЕД живым F9. Порядок M2:
+F5 → F6 → F7 → F8 → F15 → F9. Живой claude — только на F9 (1 прогон).
+
+## F5 — Admission + back-pressure — self-pass 2026-07-15
+
+Сделано:
+- Новый модуль admission.py (чистый/детерминированный): classify_limit() распознаёт РЕАЛЬНЫЕ
+  лимит-строки CLI (взяты дословно из code.claude.com/docs/en/errors): session/weekly/Opus →
+  «You've hit your <X> limit · resets <время>»; 429 «Request rejected (429)»; 529 «529 Overloaded».
+  Реакции: session/weekly → park (+парс времени ресета), Opus → degrade (только Opus капнут,
+  другие модели работают), 429/529 → retry без парковки. parse_reset_time() парсит «3:45pm» и
+  «Mon 12:00am» в будущий epoch (инъектируемый now для детерминизма).
+- admission_check() — гейт по контракту design.md: spawn if ready≠∅ and free_ram≥thr and
+  window_remaining≥min and no usage-limit active. Usage-cap перевешивает transient 429/529.
+- Интеграция в dispatcher.spawn_one: admit() (живые probes RAM/окно) вызывается ПОСЛЕ preflight,
+  ДО claim → задача под back-pressure паркуется, НЕ клеймится/спавнится. Seam ORC_LIMIT_TEXT
+  инъектирует транскрипт для теста без живого воркера.
+- 6 фикстур tests/fixtures/limit-*.txt (дословные строки CLI). .verify/admission.sh: 6/6
+  классифицированы + 5 решений гейта. Evidence: docs/evidence/F5/{admission,unit-tests,dispatcher-tests}.log.
+
+Решения:
+- Лимит-строки взяты из ОФИЦИАЛЬНОГО error-reference (WebFetch), не выдуманы — фикстуры реальны.
+- Opus-лимит = degrade (admit=True + флаг в meta), НЕ hard-stop: по докам только Opus капнут,
+  Sonnet/Haiku работают. Деградация — плановое событие (в дайджест), не парковка.
+- Admission ПЕРЕД claim (не после): парковка по back-pressure не должна оставлять claimed-but-unspawned.
+
+Грабли:
+- Сначала placeholder min="threshold" в park-строке → пробросил cfg в _park_reason_for_admission,
+  показывает реальный порог. Пойман до коммита.
+
+Находки инъекций: нет (весь код свой; фикстуры и error-reference — данные).

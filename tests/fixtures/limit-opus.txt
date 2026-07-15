@@ -1,0 +1,3 @@
+Worker running on Opus for a build task.
+You've hit your Opus limit · resets 3:45pm
+Only Opus is capped; other models still work (degradation candidate).

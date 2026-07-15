@@ -178,3 +178,69 @@ def test_reconcile_keeps_live_worker(monkeypatch):
     state["workers"] = [{"pid": live_pid, "task": "t2", "project": "/p"}]
     state, dropped = dispatcher.reconcile(state, "hub")
     assert dropped == [] and len(state["workers"]) == 1
+
+
+# --------------------------------------------------------------------------- #
+# admission + back-pressure integration (F5): spawn_one respects the gate
+# --------------------------------------------------------------------------- #
+def _clean_task_cfg(repo):
+    return {"claude_bin": "/bin/true", "mcp_allowlist": [],
+            "min_free_ram_mb": 400, "min_window_minutes": 5}, {
+        "id": "z", "metadata": {"project": repo, "slug": "z", "text": "Z"}}
+
+
+def test_spawn_one_parks_on_low_ram_never_claims(tmp_path, monkeypatch):
+    repo = _repo(str(tmp_path / "lowram"))
+    cfg, task = _clean_task_cfg(repo)
+    state = shiftmod._empty()
+    claimed = []
+    spawned = []
+    monkeypatch.setattr(dispatcher.beads, "set_status", lambda *a, **k: None)
+    monkeypatch.setattr(dispatcher.beads, "claim", lambda hub, tid: claimed.append(tid))
+    monkeypatch.setattr(dispatcher.spawn, "spawn_terminal",
+                        lambda *a, **k: spawned.append(1) or (True, "1"))
+    # starve RAM below the threshold; window is healthy
+    monkeypatch.setattr(dispatcher.probes, "free_ram_mb", lambda: 100)
+    monkeypatch.setattr(dispatcher.probes, "ccusage_window",
+                        lambda: {"active": True, "remaining_minutes": 200})
+    ok, detail, state = dispatcher.spawn_one(cfg, "hub", state, task)
+    assert ok is False and "admission" in detail and "low-ram" in detail
+    assert claimed == [] and spawned == []          # never claimed, never spawned
+    assert any(p["task"] == "z" for p in state["parked"])
+
+
+def test_spawn_one_admits_when_ram_and_window_ok(tmp_path, monkeypatch):
+    repo = _repo(str(tmp_path / "okram"))
+    cfg, task = _clean_task_cfg(repo)
+    state = shiftmod._empty()
+    claimed = []
+    monkeypatch.setattr(dispatcher.beads, "set_status", lambda *a, **k: None)
+    monkeypatch.setattr(dispatcher.beads, "claim", lambda hub, tid: claimed.append(tid))
+    monkeypatch.setattr(dispatcher, "prepare_worker_walls", lambda cfg, p: ("x", False))
+    monkeypatch.setattr(dispatcher.probes, "total_tokens_now", lambda: 0)
+    monkeypatch.setattr(dispatcher.spawn, "spawn_terminal", lambda *a, **k: (True, "42"))
+    monkeypatch.setattr(dispatcher.spawn, "worker_pids", lambda p: [12345])
+    monkeypatch.setattr(dispatcher.probes, "free_ram_mb", lambda: 4000)
+    monkeypatch.setattr(dispatcher.probes, "ccusage_window",
+                        lambda: {"active": True, "remaining_minutes": 200})
+    ok, detail, state = dispatcher.spawn_one(cfg, "hub", state, task)
+    assert ok is True and claimed == ["z"]
+    assert len(state["workers"]) == 1 and state["workers"][0]["tab_id"] == "42"
+
+
+def test_spawn_one_parks_on_session_limit_string(tmp_path, monkeypatch):
+    repo = _repo(str(tmp_path / "limitproj"))
+    cfg, task = _clean_task_cfg(repo)
+    state = shiftmod._empty()
+    claimed = []
+    monkeypatch.setattr(dispatcher.beads, "set_status", lambda *a, **k: None)
+    monkeypatch.setattr(dispatcher.beads, "claim", lambda hub, tid: claimed.append(tid))
+    monkeypatch.setattr(dispatcher.probes, "free_ram_mb", lambda: 4000)
+    monkeypatch.setattr(dispatcher.probes, "ccusage_window",
+                        lambda: {"active": True, "remaining_minutes": 200})
+    monkeypatch.setenv("ORC_LIMIT_TEXT",
+                       "You've hit your session limit · resets 3:45pm")
+    ok, detail, state = dispatcher.spawn_one(cfg, "hub", state, task)
+    assert ok is False and "limit-session" in detail
+    assert claimed == []
+    assert any("session" in p["reason"] for p in state["parked"])
