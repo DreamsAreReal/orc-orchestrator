@@ -1,0 +1,93 @@
+=== CRITERION 2: merge, not overwrite ===
+--- BEFORE (user settings.json) ---
+{
+  "model": "opus",
+  "hooks": {
+    "PostToolUse": [
+      {"matcher": ".*", "hooks": [{"type": "command", "command": "user-heartbeat-hook"}]}
+    ],
+    "PreToolUse": [
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "user-own-pretool-hook"}]}
+    ]
+  },
+  "customUserKey": {"keep": true}
+}
+
+--- generator gen (merge) ---
+/Library/Developer/CommandLineTools/usr/bin/python3: Error while finding module specification for 'orc.worker_walls' (ModuleNotFoundError: No module named 'orc')
+Merged deny-walls into existing settings: /private/tmp/orc-merge-demo.i48fmk/.claude/settings.json
+Stripped 0 secret env var(s) from worker environment.
+
+--- AFTER (merged settings.json) ---
+{
+  "model": "opus",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "user-heartbeat-hook"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "user-own-pretool-hook"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Read|Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import sys; sys.path.insert(0, r'/Users/admin/orchestrator/src'); from orc.worker_walls import hook; hook()\""
+          }
+        ]
+      }
+    ]
+  },
+  "customUserKey": {
+    "keep": true
+  },
+  "permissions": {
+    "deny": [
+      "Bash(git push:*)",
+      "Read(~/.ssh/**)"
+    ]
+  },
+  "enabledMcpjsonServers": [],
+  "enableAllProjectMcpServers": false,
+  "env": {
+    "ORC_WORKSPACE": "/private/tmp/orc-merge-demo.i48fmk"
+  }
+}
+
+ASSERT user-heartbeat-hook preserved:
+1
+ASSERT user-own-pretool-hook preserved:
+1
+ASSERT customUserKey preserved:
+1
+ASSERT model=opus preserved:
+1
+ASSERT worker_walls added:
+1
+
+=== CRITERION 3: env strip + MCP allowlist ===
+--- env strip: inject fake secrets, verify removal ---
+removed secret vars: ['AWS_SECRET_ACCESS_KEY', 'DB_PASSWORD', 'GITHUB_TOKEN', 'MY_API_KEY']
+leaked into worker env: []
+PATH/HOME kept: OK
+
+--- MCP allowlist: default empty, explicit allowlist honored ---
+default enabledMcpjsonServers: [] enableAll: False
+with allowlist: ['ctx7']
+MCP allowlist: OK

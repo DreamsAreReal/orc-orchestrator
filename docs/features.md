@@ -15,11 +15,15 @@ North Star: утром накидал ~10 задач по проектам — M
 Зачем: воркеры под глобальным bypassPermissions спавнят реальный claude уже в скелете (F2) → стены обязаны быть доказаны ДО первого реального спавна.
 Что: генератор проектного `.claude/settings.json` воркера с deny (git push, rm -rf вне workspace, чтение ~/.ssh и чужих проектов, запись вне workspace) + чистка env от секрет-денилиста + MCP-allowlist из конфига (дефолт пуст). **Негативный спайк** доказывает блокировку на 2.1.193.
 Приёмка:
-- [ ] негативный спайк: из-под воркера `git push` / `rm -rf` вне workspace / чтение `~/.ssh/id_*` — ЗАБЛОКИРОВАНЫ (вывод в evidence/F1/); спайк не прошёл → эскалация, дальнейшая сборка стоп
-- [ ] генератор не затирает существующий `.claude/settings.json` проекта: merge (deny-набор добавляется, пользовательские правила сохраняются), а не overwrite
-- [ ] env воркера без переменных секрет-денилиста; MCP только из allowlist
+- [x] негативный спайк: из-под воркера `git push` / `rm -rf` вне workspace / чтение `~/.ssh/id_*` — ЗАБЛОКИРОВАНЫ (вывод в evidence/F1/); спайк не прошёл → эскалация, дальнейшая сборка стоп
+- [x] генератор не затирает существующий `.claude/settings.json` проекта: merge (deny-набор добавляется, пользовательские правила сохраняются), а не overwrite
+- [x] env воркера без переменных секрет-денилиста; MCP только из allowlist
 Проверка: `bash .verify/negative-walls.sh` (ГЕЙТ: этот тест зелёный ДО F2)
-Статус: todo
+Статус: self-pass
+Доказательство:
+- `bash .verify/negative-walls.sh` → "ALL WALLS HELD (3/3). F1 gate PASS", exit 0 (LIVE claude 2.1.193, bypassPermissions). Лог: docs/evidence/F1/negative-walls.log
+- `python3 -m pytest tests/test_worker_walls.py` → 37 passed. Лог: docs/evidence/F1/unit-tests.log
+- merge/env/MCP живьём: docs/evidence/F1/merge-and-env-demo.log (user-hooks+customUserKey+model preserved, 4 secret vars stripped, MCP allowlist [] по умолчанию)
 
 ### F2 — Walking skeleton: сквозная смена из 1 задачи + газета + canary [M1] [золотой путь]
 Ворота: G0b, часть G1, G7 (canary), signature. Опыт/ценность: весь такт «накидал→смена→газета» тонким срезом; signature (газета+canary) в скелете, не заглушкой.
