@@ -98,9 +98,9 @@ North Star: утром накидал ~10 задач по проектам — M
 Проверка: `bash .verify/e2e-gate.sh` + вывод в evidence/F9/
 Статус: todo
 
-### F10 — LaunchAgent + config + kill switch + caffeinate [M3]
+### F10 — LaunchAgent + config + kill switch [M3]
 Ворота: G10. Опыт/ценность: подъём в GUI-сессии (Keychain), ручной стоп, дневной режим.
-Что: plist (Aqua, абсолютный путь `/opt/homebrew/bin/claude`, PATH), `~/.orc/config.json` (все калибровки — нет хардкода порогов), `orc stop` (≤10 сек, задачи в ready), caffeinate на время смены.
+Что: plist (Aqua, абсолютный путь `/opt/homebrew/bin/claude`, PATH), `~/.orc/config.json` (все калибровки — нет хардкода порогов), `orc stop` (≤10 сек, задачи в ready). **Удержание Mac от сна В КОНТУР НЕ ВСТРАИВАЕТСЯ (`caffeinate`/подобное конфликтует с мышью пользователя — прямой фидбек 2026-07-15); v1 дневной, при активности Mac не спит; для долгой смены пользователь настраивает сон сам в System Settings.**
 Приёмка:
 - [ ] LaunchAgent из GUI-сессии стартует диспетчер, `claude auth status`=0 из его контекста
 - [ ] `orc stop` останавливает всех воркеров ≤10 сек, задачи в ready (G10)
