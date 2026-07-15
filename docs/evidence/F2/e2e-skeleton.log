@@ -1,49 +1,49 @@
 === F2 walking-skeleton E2E ===
-date: Wed Jul 15 05:45:24 +04 2026
-orc_home: /tmp/orc-e2e-home.HCqGLF
-project:  /tmp/orc-e2e-proj.Lsrl6S
+date: Wed Jul 15 05:57:44 +04 2026
+orc_home: /tmp/orc-e2e-home.g9DMQG
+project:  /tmp/orc-e2e-proj.TKzXbF
 
 --- orc init ---
-orc hub initialized at /tmp/orc-e2e-home.HCqGLF (beads queue ready)
+orc hub initialized at /tmp/orc-e2e-home.g9DMQG (beads queue ready)
 
 --- orc add (hello task) ---
-added task orc-e2e-home_HCqGLF-dad -> /tmp/orc-e2e-proj.Lsrl6S
+added task orc-e2e-home_g9DMQG-d1z -> /tmp/orc-e2e-proj.TKzXbF
 
 --- G7: forced-fail canary (auth) must refuse to start ---
 canary: FAILED (1 check(s)); shift not started
 === canary preflight ===
-[ ok ] bd: bd on PATH, queue at /tmp/orc-e2e-home.HCqGLF/.beads
+[ ok ] bd: bd on PATH, queue at /tmp/orc-e2e-home.g9DMQG/.beads
 [FAIL] auth: claude auth not loggedIn / forced-fail
-[ ok ] ccusage: window active, 74 min remaining
+[ ok ] ccusage: window active, 62 min remaining
 [ ok ] notify: osascript available
-[ ok ] ram: 1895 MB free (>= 400)
+[ ok ] ram: 1798 MB free (>= 400)
 G7 PASS: broken component -> shift refused.
 
 --- orc start (real spawn of interactive claude) ---
 === canary preflight ===
-[ ok ] bd: bd on PATH, queue at /tmp/orc-e2e-home.HCqGLF/.beads
+[ ok ] bd: bd on PATH, queue at /tmp/orc-e2e-home.g9DMQG/.beads
 [ ok ] auth: loggedIn via /opt/homebrew/bin/claude
-[ ok ] ccusage: window active, 74 min remaining
+[ ok ] ccusage: window active, 62 min remaining
 [ ok ] notify: osascript available
-[ ok ] ram: 1909 MB free (>= 400)
+[ ok ] ram: 1956 MB free (>= 400)
 canary: all preflight checks passed; shift starting
-spawned worker for orc-e2e-home_HCqGLF-dad in /tmp/orc-e2e-proj.Lsrl6S (pid None)
+spawned worker for orc-e2e-home_g9DMQG-d1z in /tmp/orc-e2e-proj.TKzXbF (pid None)
 
 --- waiting up to 180s for hello.txt to appear (real worker doing real work) ---
-hello.txt appeared after ~12s; content=[ready]
+hello.txt appeared after ~16s; content=[ready]
 SPAWN PASS: real interactive claude created hello.txt containing 'ready'.
 
 --- orc status (live) ---
 ── в работе ──
-  ▸ orc-e2e-home_HCqGLF-dad  build      active   0м  88655960
-  пул: 75% окна, 74 мин осталось, RAM ok
+  ▸ orc-e2e-home_g9DMQG-d1z  build      active   0м  94120404
+  пул: 79% окна, 62 мин осталось, RAM ok
 
 --- orc status --newspaper ---
 СМЕНА orc
-смена: 0 готово, 0 ждут тебя, 0 упало; съедено 75% окна
+смена: 0 готово, 0 ждут тебя, 0 упало; съедено 79% окна
 
 ── в работе ──
-  ▸ orc-e2e-home_HCqGLF-dad  build      active   0м  —
+  ▸ orc-e2e-home_g9DMQG-d1z  build      active   0м  —
 
 newspaper first-screen word count: 23 (<=150 required)
 NEWSPAPER PASS: summary present, first screen <=150 words.

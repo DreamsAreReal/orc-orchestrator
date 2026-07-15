@@ -19,7 +19,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] генератор не затирает существующий `.claude/settings.json` проекта: merge (deny-набор добавляется, пользовательские правила сохраняются), а не overwrite
 - [x] env воркера без переменных секрет-денилиста; MCP только из allowlist
 Проверка: `bash .verify/negative-walls.sh` (ГЕЙТ: этот тест зелёный ДО F2)
-Статус: self-pass
+Статус: verified
 Доказательство:
 - `bash .verify/negative-walls.sh` → "ALL WALLS HELD (3/3). F1 gate PASS", exit 0 (LIVE claude 2.1.193, bypassPermissions). Лог: docs/evidence/F1/negative-walls.log
 - `python3 -m pytest tests/test_worker_walls.py` → 37 passed. Лог: docs/evidence/F1/unit-tests.log
@@ -34,7 +34,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] `orc start` спавнит реальный интерактивный терминал с claude (не headless), задача «создай hello.txt со словом ready» выполняется, файл появляется
 - [x] `orc status` печатает газету: первая строка = сводка (N done/parked/failed + % окна), первый экран ≤150 слов
 Проверка: `bash .verify/e2e-skeleton.sh` + вывод в `docs/evidence/F2/`
-Статус: self-pass
+Статус: verified
 Доказательство:
 - `bash .verify/e2e-skeleton.sh` → "F2 SKELETON PASS", exit 0. РЕАЛЬНЫЙ osascript-терминал с интерактивным claude создал hello.txt=[ready] за ~14с; G7 forced-fail отказал старт; газета ≤150 слов. Лог: docs/evidence/F2/e2e-skeleton.log
 - `python3 -m pytest tests/test_skeleton.py` → 13 passed (config/shift/ordering/report/canary). Лог: docs/evidence/F2/unit-tests.log
@@ -47,7 +47,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] `orc add --batch` из 10 строк создаёт 10 bd-задач ≤5 мин (секундомер) (G11)
 - [x] `orc status` live: строка на активную задачу + итог пула, гейтовые сверху; `--json` валиден
 Проверка: `python3 -m pytest tests/test_cli.py` + `bash .verify/timing-add.sh`
-Статус: self-pass
+Статус: verified
 Доказательство:
 - `bash .verify/timing-add.sh` → "G11 PASS: 10 tasks in ready in 8s (<= 5 min)", exit 0. Лог: docs/evidence/F3/timing-add.log
 - `python3 -m pytest tests/test_cli.py` → 7 passed (single/batch add, skip плохого проекта, JSON-валидность, gate-last ordering). Лог: docs/evidence/F3/unit-tests.log
@@ -60,7 +60,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] грязное git-дерево «не наше» → задача паркуется с причиной; re-validate: изменённый продуктовый слой после claim → пометка в STATE задачи
 - [x] гейтовые задачи спавнятся ПОСЛЕ автономных (сортировка в конец)
 Проверка: `python3 -m pytest tests/test_dispatcher.py` (моки bd + git-фикстуры)
-Статус: self-pass
+Статус: verified
 Доказательство:
 - `python3 -m pytest tests/test_dispatcher.py` → 11 passed (preflight×4, revalidate×3, mutex, dirty-park, reconcile×2). Лог: docs/evidence/F4/unit-tests.log
 - `bash .verify/dispatcher-core.sh` → "F4 DISPATCHER-CORE PASS", exit 0 (live: G3 1-spawn/проект + mutex-refuse; dirty-park с причиной, bd status open; gate-order AUTO AUTO GATE). Лог: docs/evidence/F4/dispatcher-core.log
@@ -142,7 +142,27 @@ North Star: утром накидал ~10 задач по проектам — M
 Проверка: `bash .verify/e2e-shift.sh` (полный сценарий) + вывод в evidence/F12/
 Статус: todo
 
+### F14 — Замыкание петли: детект завершения задачи + газета догоняет DONE [M1] [фикс-фича из consumer M1, золотой путь]
+Ворота: часть G1, core loop. Опыт/ценность: «вернулся за кофе → газета показывает результат» — без этого продукт бессмыслен (consumer: задача выполнена, газета висит на «в работе»).
+Что: диспетчер поллит `<проект>/docs/tasks/<слаг>/STATE.md` (или features) активной задачи; терминальный статус (DONE-WAVE-N/DONE/parked-on-gate) → `bd close` + обновление shift.json/газеты + закрытие вкладки воркера (osascript по сохранённому window/tab id). Спавн сохраняет идентификатор вкладки (чинит `pid None`). Полировка consumer: `init --help` с текстом; согласовать «.beads»↔«~/.orc» в сообщениях; `status` после add показывает ready-задачи (не «смена не запущена» при непустой очереди). Язык вывода — смешанный (решение пользователя, не баг).
+Приёмка:
+- [ ] consumer-сценарий: задача выполнилась → `orc status --newspaper` показывает «1 готово» БЕЗ ручного ls/cat (петля замкнута)
+- [ ] вкладка воркера закрывается после терминального статуса; идентификатор вкладки в shift.json (не None)
+- [ ] `orc status` при непустой ready-очереди до start показывает задачи; `init --help` непустой; сообщения о хабе единообразны
+Проверка: `bash .verify/e2e-loop-close.sh` (полный: add→start→ждать DONE→газета=готово, автоматически) + вывод в evidence/F14/
+Статус: todo
+
+### F13 — OS-sandbox как основная стена (усиление F1) [M3] [фикс-фича из eval M1]
+Ворота: G0c, безопасность. Опыт/ценность: паттерн-хук обходится обфускацией (base64|bash, xargs rm, python shutil.rmtree, find -delete) — для безнадзорного bypass нужна OS-стена.
+Что: воркеры под OS-sandbox (macOS seatbelt, из волны A: ФС-запись только в workspace + сеть по allowlist, покрывает подпроцессы, −84% промптов) как ОСНОВНАЯ граница; PreToolUse-hook — вторичный слой. Негативный спайк расширяется обфусцированными обходами.
+Приёмка:
+- [ ] обфусцированные обходы (base64|bash rm вне ws, python -c shutil.rmtree, find вне ws -delete) ЗАБЛОКИРОВАНЫ sandbox (evidence/F13/)
+- [ ] запись вне workspace невозможна на уровне ОС, не только hook
+Проверка: `bash .verify/sandbox-walls.sh` (расширенный негативный спайк) + вывод в evidence/F13/
+Статус: todo
+
 ---
-Майлстоуны: M1 = F1-F4 (стены-гейт + скелет + CLI + ядро), M2 = F5-F9 (надёжность + гейт), M3 = F10 (ops), M4 = F11-F12 (патчи конвейера + E2E).
+Майлстоуны: M1 = F1-F4 ✓verified + F14 (замыкание петли, из consumer), M2 = F5-F9 (надёжность + гейт), M3 = F10 + F13 (ops + OS-sandbox), M4 = F11-F12 (патчи конвейера + E2E).
 Золотой путь: F2 (скелет+signature), F4 (ядро), F9 (гейт-опыт).
 Порядок священен: F1 (стены-гейт) ДО F2 (первый реальный спавн).
+Фикс-фичи из eval M1: F8 (реальный PID в shift.json — G6/G10), F13 (OS-sandbox — обфускация обходит паттерн-хук).
