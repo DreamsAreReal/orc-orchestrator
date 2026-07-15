@@ -7,7 +7,7 @@ file format and safe read/write only; reconciliation logic lives in the dispatch
 Format:
   {
     "started": <iso ts or null>,
-    "workers": [{"pid","session","project","task","phase","started","tokens_before"}],
+    "workers": [{"pid","tab_id","session","project","task","phase","started","tokens_before"}],
     "parked":  [{"task","reason","ts"}],
     "done":    [{"task","ts"}],
     "failed":  [{"task","reason","ts"}],
@@ -66,10 +66,12 @@ def start_shift(state, window_pct=None):
     return state
 
 
-def add_worker(state, pid, session, project, task, phase="build", tokens_before=None):
+def add_worker(state, pid, session, project, task, phase="build",
+               tokens_before=None, tab_id=None):
     state["workers"] = [w for w in state["workers"] if w.get("task") != task]
     state["workers"].append({
         "pid": pid,
+        "tab_id": tab_id,       # Terminal window id (F14) — closes the tab on completion
         "session": session,
         "project": project,
         "task": task,

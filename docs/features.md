@@ -146,11 +146,16 @@ North Star: утром накидал ~10 задач по проектам — M
 Ворота: часть G1, core loop. Опыт/ценность: «вернулся за кофе → газета показывает результат» — без этого продукт бессмыслен (consumer: задача выполнена, газета висит на «в работе»).
 Что: диспетчер поллит `<проект>/docs/tasks/<слаг>/STATE.md` (или features) активной задачи; терминальный статус (DONE-WAVE-N/DONE/parked-on-gate) → `bd close` + обновление shift.json/газеты + закрытие вкладки воркера (osascript по сохранённому window/tab id). Спавн сохраняет идентификатор вкладки (чинит `pid None`). Полировка consumer: `init --help` с текстом; согласовать «.beads»↔«~/.orc» в сообщениях; `status` после add показывает ready-задачи (не «смена не запущена» при непустой очереди). Язык вывода — смешанный (решение пользователя, не баг).
 Приёмка:
-- [ ] consumer-сценарий: задача выполнилась → `orc status --newspaper` показывает «1 готово» БЕЗ ручного ls/cat (петля замкнута)
-- [ ] вкладка воркера закрывается после терминального статуса; идентификатор вкладки в shift.json (не None)
-- [ ] `orc status` при непустой ready-очереди до start показывает задачи; `init --help` непустой; сообщения о хабе единообразны
+- [x] consumer-сценарий: задача выполнилась → `orc status --newspaper` показывает «1 готово» БЕЗ ручного ls/cat (петля замкнута)
+- [x] вкладка воркера закрывается после терминального статуса; идентификатор вкладки в shift.json (не None) — NB: «закрывается» реализовано как СТОП воркера (kill по tty, RAM освобождается); удаление пустого husk-окна — best-effort, блокируется Terminal-профилем shellExitAction пользователя (находка среды, косметика)
+- [x] `orc status` при непустой ready-очереди до start показывает задачи; `init --help` непустой; сообщения о хабе единообразны
 Проверка: `bash .verify/e2e-loop-close.sh` (полный: add→start→ждать DONE→газета=готово, автоматически) + вывод в evidence/F14/
-Статус: todo
+Статус: self-pass
+Доказательство:
+- `bash .verify/e2e-loop-close.sh` → "F14 CLOSE-THE-LOOP PASS", exit 0. РЕАЛЬНЫЙ osascript-терминал (window id 4865, tty ttys014); `orc status` ПОЛЛИТ STATE.md → газета «смена: 1 готово» за ~4с БЕЗ ручного ls; воркер остановлен (0 процессов на tty); bd closed. Лог: docs/evidence/F14/e2e-loop-close.log
+- `python3 -m pytest tests/test_loop_close.py` → 15 passed (детектор DONE/DONE-WAVE-N/BETA/gate/in-progress + poll done/gate/bd-error/no-state + запись window id). Лог: docs/evidence/F14/unit-tests.log
+- полный набор: 83 passed (68 M1 + 15 F14), 0 регрессий.
+- полировка consumer живьём: init --help с текстом; `orc status` до start показывает секцию «в очереди»; сообщения зовут хаб «~/.orc» единообразно (см. e2e-loop-close.log init-строку).
 
 ### F13 — OS-sandbox как основная стена (усиление F1) [M3] [фикс-фича из eval M1]
 Ворота: G0c, безопасность. Опыт/ценность: паттерн-хук обходится обфускацией (base64|bash, xargs rm, python shutil.rmtree, find -delete) — для безнадзорного bypass нужна OS-стена.

@@ -40,17 +40,20 @@ ADD_CREATED = "added task {id} -> {project}"
 ADD_BATCH_DONE = "added {n} task(s) to ready"
 ERR_NO_TASK_TEXT = "error: task text is required"
 ERR_PROJECT_MISSING = "error: project path does not exist: {project}"
+# Hub terminology is consistent everywhere: the hub is the `~/.orc` directory; the beads
+# queue lives inside it under `.beads/`. Messages name the hub path, not the inner dir.
 ERR_HUB_MISSING = (
-    "error: orc hub is not initialized. Run `orc init` first (creates .beads queue)."
+    "error: orc hub is not initialized. Run `orc init` first "
+    "(creates the ~/.orc hub with its beads queue)."
 )
 ERR_BD_MISSING = "error: `bd` (beads) not found on PATH; install with `brew install beads`."
-HUB_INITIALIZED = "orc hub initialized at {hub} (beads queue ready)"
+HUB_INITIALIZED = "orc hub initialized at {hub} (beads queue ready inside .beads/)"
 HUB_ALREADY = "orc hub already initialized at {hub}"
 
 START_CANARY_OK = "canary: all preflight checks passed; shift starting"
 START_CANARY_FAIL = "canary: FAILED ({n} check(s)); shift not started"
 START_NO_READY = "no ready tasks in the queue; nothing to start"
-START_SPAWNED = "spawned worker for {id} in {project} (pid {pid})"
+START_SPAWNED = "spawned worker for {id} in {project} (Terminal window id {tab})"
 
 # --- dispatcher: preflight / re-validate / reconcile (en) ---
 PARK_DIRTY_TREE = (
@@ -63,6 +66,8 @@ REVALIDATE_NOTE = (
     "orc re-validate: the product layer (docs/) changed after this task's brief was "
     "approved (rev {rev}); the plan may be stale — confirm scope before building."
 )
+PARK_ON_GATE = "task reached a gate; waiting for your answer (see the gate card)"
+
 
 # --- Canary check labels (en; operational preflight report) ---
 CANARY_HEADER = "=== canary preflight ==="
@@ -74,6 +79,8 @@ RU_REPORT_TITLE = "СМЕНА orc"
 RU_REPORT_SUMMARY = "смена: {done} готово, {waiting} ждут тебя, {failed} упало; съедено {pct}% окна"
 RU_REPORT_NO_SHIFT = "смена не запущена. Поставь задачи (`orc add`) и запусти (`orc start`)."
 RU_REPORT_EMPTY = "смена пуста: задач в очереди нет."
+RU_SECTION_QUEUED = "── в очереди (смена не запущена, `orc start`) ──"
+RU_ROW_QUEUED = "  • {id}  {project}"
 RU_ROW_RUNNING = "  ▸ {id}  {phase:<10} {status:<8} {mins}м  {tokens}"
 RU_ROW_WAITING = "  ⏸ {id}  ждёт тебя: {reason}"
 RU_ROW_DONE = "  ✓ {id}  готово"

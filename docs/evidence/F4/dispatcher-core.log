@@ -1,6 +1,6 @@
 === F4 dispatcher-core live checks ===
-date: Wed Jul 15 05:56:04 +04 2026
-orc hub initialized at /tmp/orc-f4-home.LuPqjV (beads queue ready)
+date: Wed Jul 15 06:17:34 +04 2026
+orc hub initialized at /tmp/orc-f4-home.dXqRNH (beads queue ready)
 
 --- gate ordering: gate task must sort AFTER autonomous ---
 order (by kind): AUTO AUTO GATE

@@ -46,8 +46,24 @@ def summary_line(state):
     return S.RU_REPORT_SUMMARY.format(done=done, waiting=waiting, failed=failed, pct=pct_s)
 
 
-def live_status(state, hub, window=None):
-    """Live status text: gate/waiting rows first, running rows, pool footer."""
+def queued_lines(ready_tasks):
+    """Render the ready-but-not-started queue (consumer M1: a task added before `start`
+    was invisible in status). One row per queued task with its project."""
+    lines = [S.RU_SECTION_QUEUED]
+    for t in ready_tasks:
+        meta = beads.task_meta(t)
+        lines.append(S.RU_ROW_QUEUED.format(
+            id=t.get("id"), project=meta.get("project", "—")))
+    return lines
+
+
+def live_status(state, hub, window=None, ready_tasks=None):
+    """Live status text: gate/waiting rows first, running rows, pool footer.
+
+    When no shift is running but the queue is non-empty, show the queued tasks instead of
+    the bare "shift not started" line (consumer M1 finding #2): the operator must see that
+    the task they just added is really there.
+    """
     if window is None:
         window = probes.ccusage_window()
     lines = []
@@ -56,6 +72,10 @@ def live_status(state, hub, window=None):
     workers = state.get("workers", [])
 
     if not state.get("started") and not workers and not parked:
+        if ready_tasks:
+            body = queued_lines(ready_tasks)
+            body.append(S.RU_REPORT_NO_SHIFT)
+            return "\n".join(body)
         return S.RU_REPORT_NO_SHIFT
 
     # Waiting-on-you (gates / parked) first.

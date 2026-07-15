@@ -6,6 +6,7 @@ and shift.json PID reconciliation. This module keeps the spawn/claim primitives 
 features share one code path.
 """
 import os
+import re
 
 from . import beads
 from . import shift as shiftmod
@@ -17,6 +18,139 @@ from . import strings as S
 
 
 GATE_LABEL = "gate"
+
+# --- F14: completion detection ------------------------------------------------
+# The dispatcher does not trust the worker process to signal completion (an interactive
+# claude tab lingers after the work is done -- consumer M1). Instead it polls the task's
+# STATE.md on disk ("disk = truth") and reacts to a TERMINAL status. This mirrors the
+# pipeline status vocabulary (SKILL state machine): DONE-WAVE-N / BETA / DONE are done;
+# a task parked on a gate is waiting-on-you (a human must answer before it resumes).
+#
+# Product STATE.md is written in the product language (Russian). The status-field label
+# and gate phrases below are matched DATA; they are kept as \u escape sequences so this
+# source file stays ASCII (EN-only code policy). English fallbacks cover en STATE.md too.
+
+# Terminal "done" markers (the shift closes the bd task and the worker window).
+_DONE_RE = re.compile(r"\bDONE(?:-WAVE-\d+)?\b")
+_BETA_RE = re.compile(r"\bBETA\b")
+# Status-field label: the escaped literal is the product-language word for "Status".
+_STATUS_LABEL = "(?:\u0421\u0442\u0430\u0442\u0443\u0441|Status)"
+_STATUS_FIELD_RE = re.compile(
+    "\\s*[-*]?\\s*\\**\\s*" + _STATUS_LABEL + "\\s*\\**\\s*[:\uff1a]\\s*(.+)")
+# Gate / waiting-on-a-human phrases. Escaped product-language literals mean:
+#   waits / answer / decision / user. English fallbacks follow.
+_GATE_RE = re.compile(
+    "parked[- ]on[- ]gate|"
+    "\u0436\u0434\u0451\u0442 (?:\u043e\u0442\u0432\u0435\u0442\u0430|"
+    "\u0440\u0435\u0448\u0435\u043d\u0438\u044f|"
+    "\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f)|"
+    "waiting (?:on|for) (?:the )?(?:user|human|gate)", re.IGNORECASE)
+
+
+def task_state_path(project, slug):
+    """Path to a task's STATE.md inside the two-layer workspace (design.md contract)."""
+    return os.path.join(project, "docs", "tasks", slug, "STATE.md")
+
+
+def _status_field(text):
+    """Extract the value of the STATE.md status field ('Status'/RU equivalent)."""
+    for line in text.splitlines():
+        m = _STATUS_FIELD_RE.match(line)
+        if m:
+            return m.group(1).strip().strip("*").strip()
+    return None
+
+
+def detect_terminal_status(state_text):
+    """Classify a task STATE.md as ('done'|'gate'|None).
+
+    Prefers the explicit status field; falls back to scanning the whole document so a
+    "5 VERIFY -> DONE" phase line (no separate status field) is still detected. A gate
+    marker outranks a stray DONE token so a gated task is never auto-closed by mistake.
+    """
+    if not state_text:
+        return None
+    field = _status_field(state_text)
+    haystack = field if field else state_text
+    if _GATE_RE.search(state_text):
+        return "gate"
+    if _DONE_RE.search(haystack) or _BETA_RE.search(haystack):
+        return "done"
+    # field present but non-terminal (still in progress) -> not done yet
+    return None
+
+
+def read_task_state(project, slug):
+    """Return the task STATE.md text, or None if it does not exist yet."""
+    path = task_state_path(project, slug)
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except (OSError, UnicodeError):
+        return None
+
+
+def poll_completions(state, hub):
+    """Detect finished tasks by polling their STATE.md and close the loop (F14).
+
+    For each active worker: read its task STATE.md; on a terminal status ->
+      - done: `bd close`, mark_done in shift.json, close the worker's Terminal window;
+      - gate: `bd` blocked (park), mark_parked (waiting-on-you), window KEPT for the
+        operator to answer the live gate (F9 owns the notification).
+    bd is the truth about tasks; on a bd error we still repair shift.json so the newspaper
+    reflects reality. Returns (state, [(task_id, kind)]) for the transitions applied.
+    """
+    transitions = []
+    for w in list(state.get("workers", [])):
+        task_id = w.get("task")
+        project = w.get("project")
+        slug = _worker_slug(hub, task_id, project)
+        if not (task_id and project and slug):
+            continue
+        text = read_task_state(project, slug)
+        status = detect_terminal_status(text)
+        if status == "done":
+            _safe_close(hub, task_id)
+            shiftmod.mark_done(state, task_id)
+            # stop the lingering worker (frees RAM) and close its window (best effort)
+            spawn.close_window(w.get("tab_id"))
+            transitions.append((task_id, "done"))
+        elif status == "gate":
+            reason = S.PARK_ON_GATE
+            _safe_block(hub, task_id)
+            shiftmod.mark_parked(state, task_id, reason)
+            # keep the worker window: the session waits live for the operator (F9)
+            transitions.append((task_id, "gate"))
+    return state, transitions
+
+
+def _worker_slug(hub, task_id, project):
+    """Resolve a worker's task slug from bd metadata (falls back to the task id)."""
+    task = beads.show(hub, task_id) if task_id else None
+    if task:
+        meta = beads.task_meta(task)
+        return meta.get("slug") or task_id
+    return task_id
+
+
+def _safe_close(hub, task_id):
+    try:
+        beads.close(hub, task_id)
+        return True
+    except beads.BeadsError:
+        return False
+
+
+def _safe_block(hub, task_id):
+    try:
+        beads.set_status(hub, task_id, "blocked")
+        return True
+    except beads.BeadsError:
+        try:
+            beads.set_status(hub, task_id, "open")
+        except beads.BeadsError:
+            pass
+        return False
 
 
 def order_ready(tasks):
@@ -159,14 +293,17 @@ def _pid_alive(pid):
 
 
 def start_prompt(project, slug, text):
-    """The worker start prompt (en) — resume pipeline or start phase 0 (design.md).
+    """The worker start prompt (en) -- resume pipeline or start phase 0 (design.md).
 
     ORC_RAW_PROMPT=1 spawns the worker with the raw task text instead of the pipeline
     wrapper. Used by the skeleton E2E (F2) to prove the SPAWN mechanism deterministically;
     real shifts use the pipeline wrapper so the conveyor's quality gates apply.
+    ORC_PROMPT_OVERRIDE (with ORC_RAW_PROMPT=1) supplies a verbatim prompt -- used by the
+    F14 loop-close E2E to make the worker also write its task STATE.md (the polled signal).
     """
     if os.environ.get("ORC_RAW_PROMPT") == "1":
-        return text
+        override = os.environ.get("ORC_PROMPT_OVERRIDE")
+        return override if override else text
     return (
         "Resume/start pipeline task. Workspace: docs/tasks/%s/. Product layer: docs/. "
         "Task: %s. Read docs/tasks/%s/STATE.md if it exists (resume), else phase 0."
@@ -217,9 +354,13 @@ def spawn_one(cfg, hub, state, task):
         shiftmod.mark_failed(state, task_id, "spawn failed: %s" % detail)
         return False, "spawn failed: %s" % detail, state
 
-    # register worker (PID discovered best-effort after spawn)
+    # register worker. `detail` is the Terminal window id (spawn_terminal); we store it as
+    # tab_id so the dispatcher can close the worker's window on completion and so status no
+    # longer prints a bare `None` (consumer finding). The PID is discovered best-effort.
+    tab_id = detail
     pids = spawn.worker_pids(project)
     pid = pids[0] if pids else None
-    shiftmod.add_worker(state, pid=pid, session=detail, project=project,
-                        task=task_id, phase="build", tokens_before=tokens_before)
-    return True, S.START_SPAWNED.format(id=task_id, project=project, pid=pid), state
+    shiftmod.add_worker(state, pid=pid, session="window id %s" % tab_id, project=project,
+                        task=task_id, phase="build", tokens_before=tokens_before,
+                        tab_id=tab_id)
+    return True, S.START_SPAWNED.format(id=task_id, project=project, tab=tab_id), state

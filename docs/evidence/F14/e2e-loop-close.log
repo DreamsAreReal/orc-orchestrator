@@ -1,0 +1,48 @@
+=== F14 close-the-loop E2E ===
+date: Wed Jul 15 06:52:15 +04 2026
+orc_home: /tmp/orc-loop-home.dFnf0f
+project:  /tmp/orc-loop-proj.mFSKuk
+
+computed task slug: create-the-file-docs-hi-txt
+dispatcher will poll: /tmp/orc-loop-proj.mFSKuk/docs/tasks/create-the-file-docs-hi-txt/STATE.md
+
+--- orc init ---
+orc hub initialized at /tmp/orc-loop-home.dFnf0f (beads queue ready inside .beads/)
+
+--- orc add ---
+added task orc-loop-home_dFnf0f-4w9 -> /tmp/orc-loop-proj.mFSKuk
+
+--- orc start (REAL Terminal spawn; deterministic in-tab worker via seam) ---
+=== canary preflight ===
+[ ok ] bd: bd on PATH, queue at /tmp/orc-loop-home.dFnf0f/.beads
+[ ok ] auth: loggedIn via /opt/homebrew/bin/claude
+[ ok ] ccusage: window active, 8 min remaining
+[ ok ] notify: osascript available
+[ ok ] ram: 1760 MB free (>= 400)
+canary: all preflight checks passed; shift starting
+spawned worker for orc-loop-home_dFnf0f-4w9 in /tmp/orc-loop-proj.mFSKuk (Terminal window id 4865)
+
+recorded worker tab_id (shift.json): 4865
+TAB-ID PASS: shift.json recorded a real Terminal window id.
+worker tty: /dev/ttys014
+
+--- polling 'orc status' up to 300s until the shift reports done (NO manual ls) ---
+shift reported DONE after ~4s (via status polling STATE.md, no manual ls).
+
+--- final newspaper (proof the digest shows the completion) ---
+СМЕНА orc
+смена: 1 готово, 0 ждут тебя, 0 упало; съедено 98% окна
+
+── завершено ──
+  ✓ orc-loop-home_dFnf0f-4w9  готово
+
+newspaper reports at least one done: yes
+NEWSPAPER-CATCHUP PASS: the shift newspaper reached '1 done' on its own (loop closed).
+
+--- worker stopped by the dispatcher (tab closed = worker terminated, RAM freed)? ---
+live processes still on worker tty /dev/ttys014: 0
+worker window still present (cosmetic; profile-dependent): true
+WORKER-STOPPED PASS: dispatcher terminated the worker on loop close (RAM freed).
+
+=== RESULT ===
+F14 CLOSE-THE-LOOP PASS (newspaper catches up + worker stopped + real window id + bd closed).

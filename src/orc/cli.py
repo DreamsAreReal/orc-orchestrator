@@ -167,6 +167,26 @@ def cmd_start(args):
 def cmd_status(args):
     hub = config.hub_dir()
     state = shiftmod.load()
+
+    # Close the loop (F14): before rendering, poll each active worker's task STATE.md and
+    # react to a terminal status (done -> bd close + close the Terminal window; gate ->
+    # park). This is exactly the consumer scenario — the operator looks at the newspaper,
+    # and the newspaper must have caught up to the DONE that is already on disk. We persist
+    # so the transition is durable and not recomputed every view.
+    hub_ready = os.path.isdir(os.path.join(hub, ".beads"))
+    if hub_ready and state.get("workers"):
+        state, transitions = dispatcher.poll_completions(state, hub)
+        if transitions:
+            shiftmod.save(state)
+
+    # The ready queue (tasks added but not yet started) — shown when no shift is running.
+    ready_tasks = []
+    if hub_ready and not state.get("started") and not state.get("workers"):
+        try:
+            ready_tasks = dispatcher.order_ready(beads.ready(hub))
+        except beads.BeadsError:
+            ready_tasks = []
+
     window = probes.ccusage_window()
     if args.json:
         print(json.dumps({
@@ -175,13 +195,15 @@ def cmd_status(args):
             "parked": state.get("parked", []),
             "done": state.get("done", []),
             "failed": state.get("failed", []),
+            "ready": [{"id": t.get("id"),
+                       "project": beads.task_meta(t).get("project")} for t in ready_tasks],
             "summary": reportmod.summary_line(state),
         }, ensure_ascii=False))
         return 0
     if args.newspaper:
         print(reportmod.newspaper(state, hub, window=window))
     else:
-        print(reportmod.live_status(state, hub, window=window))
+        print(reportmod.live_status(state, hub, window=window, ready_tasks=ready_tasks))
     return 0
 
 
@@ -189,8 +211,18 @@ def build_parser():
     p = argparse.ArgumentParser(prog="orc", description="autonomous task-shift loop for Claude Code")
     sub = p.add_subparsers(dest="cmd")
 
-    pi = sub.add_parser("init", help="initialize the orc hub (beads queue)")
-    pi.add_argument("--json", action="store_true")
+    pi = sub.add_parser(
+        "init",
+        help="initialize the orc hub (a single ~/.orc dir with a beads queue)",
+        description=(
+            "Create the orc hub: a single directory at ~/.orc (override with $ORC_HOME) "
+            "that holds one beads queue (.beads/) shared by ALL your projects, plus the "
+            "default config.json. Idempotent: running it again reports the existing hub. "
+            "The hub is global, not per-project — all `orc add` tasks land in this one "
+            "queue regardless of which project they target."),
+    )
+    pi.add_argument("--json", action="store_true",
+                    help="print the result as JSON ({hub, created})")
     pi.set_defaults(func=cmd_init)
 
     pa = sub.add_parser("add", help="add a task to the queue")

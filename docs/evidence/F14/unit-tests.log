@@ -1,0 +1,23 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0 -- /Library/Developer/CommandLineTools/usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /Users/admin/orchestrator
+collecting ... collected 15 items
+
+tests/test_loop_close.py::test_detect_terminal_status[# STATE - Create HELLO.txt\n- **\u0424\u0430\u0437\u0430**: 5 VERIFY \u2192 DONE\n- **\u0421\u0442\u0430\u0442\u0443\u0441**: DONE\n-done] PASSED [  6%]
+tests/test_loop_close.py::test_detect_terminal_status[- **\u0421\u0442\u0430\u0442\u0443\u0441**: DONE-WAVE-2-done] PASSED [ 13%]
+tests/test_loop_close.py::test_detect_terminal_status[- **\u0421\u0442\u0430\u0442\u0443\u0441**: BETA-done] PASSED [ 20%]
+tests/test_loop_close.py::test_detect_terminal_status[some phase note: 5 VERIFY -> DONE-done] PASSED [ 26%]
+tests/test_loop_close.py::test_detect_terminal_status[- **\u0424\u0430\u0437\u0430**: 4 BUILD\n- **\u0421\u0442\u0430\u0442\u0443\u0441**: \u0432 \u0440\u0430\u0431\u043e\u0442\u0435\n-None] PASSED [ 33%]
+tests/test_loop_close.py::test_detect_terminal_status[- **\u0421\u0442\u0430\u0442\u0443\u0441**: parked-on-gate\n- Gate: \u0436\u0434\u0451\u0442 \u043e\u0442\u0432\u0435\u0442\u0430 \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f\n-gate] PASSED [ 40%]
+tests/test_loop_close.py::test_detect_terminal_status[- **\u0421\u0442\u0430\u0442\u0443\u0441**: parked-on-gate\nDONE-WAVE-1 also mentioned-gate] PASSED [ 46%]
+tests/test_loop_close.py::test_detect_terminal_status[-None] PASSED      [ 53%]
+tests/test_loop_close.py::test_detect_terminal_status[None-None] PASSED  [ 60%]
+tests/test_loop_close.py::test_detect_terminal_status[nothing terminal here-None] PASSED [ 66%]
+tests/test_loop_close.py::test_poll_no_state_leaves_worker_running PASSED [ 73%]
+tests/test_loop_close.py::test_poll_done_closes_loop PASSED              [ 80%]
+tests/test_loop_close.py::test_poll_gate_parks_and_keeps_window PASSED   [ 86%]
+tests/test_loop_close.py::test_poll_bd_error_still_repairs_shift PASSED  [ 93%]
+tests/test_loop_close.py::test_spawn_records_window_id_not_none PASSED   [100%]
+
+============================== 15 passed in 0.08s ==============================
