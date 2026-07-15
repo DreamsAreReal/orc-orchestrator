@@ -35,6 +35,15 @@ def _window_pct(window):
     return int(round(used / total * 100))
 
 
+def _no_sandbox_active():
+    """True if the config disables the OS-sandbox wall (allow_no_sandbox opt-out). B2."""
+    try:
+        from . import config
+        return bool(config.load().get("allow_no_sandbox"))
+    except Exception:
+        return False
+
+
 def summary_line(state):
     """First line of the newspaper: the whole shift in one grep-able sentence."""
     done = len(state.get("done", []))
@@ -117,6 +126,13 @@ def newspaper(state, hub, window=None):
     if window is None:
         window = probes.ccusage_window()
     lines = [summary_line(state), S.RU_REPORT_TITLE, ""]
+
+    # B2 loud opt-out: if the OS-sandbox is disabled (allow_no_sandbox), the worker runs
+    # without its exfiltration wall. Surface a bold warning in the morning digest so the
+    # operator sees the missing wall, not just in the start-time canary.
+    if _no_sandbox_active():
+        lines.append(S.RU_NO_SANDBOX_WARN)
+        lines.append("")
 
     parked = state.get("parked", [])
     done = state.get("done", [])

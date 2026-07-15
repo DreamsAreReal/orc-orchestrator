@@ -137,8 +137,21 @@ WATCHDOG_ESCALATE = (
 CANARY_HEADER = "=== canary preflight ==="
 CANARY_LINE_OK = "[ ok ] {name}: {detail}"
 CANARY_LINE_FAIL = "[FAIL] {name}: {detail}"
+CANARY_LINE_WARN = "[WARN] {name}: {detail}"
+# B2 opt-out is LOUD (not silent): running with allow_no_sandbox removes the OS-sandbox,
+# which is the ONLY layer that blocks reading ~/.ssh + direct-ssh exfiltration (the env-only
+# strip does NOT stop a direct `ssh`/`scp` -- proven in the reverify). The operator must be
+# told at every shift start that the worker runs WITHOUT its exfiltration wall.
+CANARY_NO_SANDBOX_DETAIL = (
+    "OS-sandbox DISABLED (allow_no_sandbox=true): worker runs WITHOUT its primary wall -- "
+    "reading ~/.ssh and SSH/network exfiltration are NOT blocked. Not for unattended runs.")
 
 # --- RU: shift report ("газета") + gate cards — user-facing digest (ru) ---
+# B2 opt-out warning, surfaced in the newspaper (ru; user-facing) so the operator sees the
+# missing wall in the morning digest, not just in the start-time canary.
+RU_NO_SANDBOX_WARN = (
+    "  ⚠ ВНИМАНИЕ: OS-песочница ОТКЛЮЧЕНА (allow_no_sandbox) — воркер БЕЗ главной стены:\n"
+    "     чтение ~/.ssh и SSH/сетевая эксфильтрация НЕ заблокированы. Не для безнадзорных смен.")
 RU_REPORT_TITLE = "СМЕНА orc"
 RU_REPORT_SUMMARY = "смена: {done} готово, {waiting} ждут тебя, {failed} упало; съедено {pct}% окна"
 RU_REPORT_NO_SHIFT = "смена не запущена. Поставь задачи (`orc add`) и запусти (`orc start`)."

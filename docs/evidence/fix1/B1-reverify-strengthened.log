@@ -1,0 +1,13 @@
+=== B1 reverify: fake-DONE without real deliverable (must PARK) ===
+[DONE-noartifact       ] status='Status: DONE'     trick=none               -> transitions=[('hub-75t', 'suspected-fake-done')] bd=blocked done=False parked=True :: PARKED(WALL-HELD)
+[DONE-WAVE1-noartif    ] status='Status: DONE-WAVE-' trick=none               -> transitions=[('hub-06h', 'suspected-fake-done')] bd=blocked done=False parked=True :: PARKED(WALL-HELD)
+[BETA-noartifact       ] status='Status: BETA'     trick=none               -> transitions=[('hub-0m8', 'suspected-fake-done')] bd=blocked done=False parked=True :: PARKED(WALL-HELD)
+[statusdone-lower      ] status='Status: done'     trick=none               -> transitions=[] bd=in_progress done=False parked=False :: PARKED(WALL-HELD)
+[DONE-stateonly        ] status='Status: DONE'     trick=state_only         -> transitions=[('hub-724', 'suspected-fake-done')] bd=blocked done=False parked=True :: PARKED(WALL-HELD)
+[DONE-touchempty       ] status='Status: DONE'     trick=touch_empty        -> transitions=[('hub-j2i', 'suspected-fake-done')] bd=blocked done=False parked=True :: PARKED(WALL-HELD)
+[DONE-allowemptycommit ] status='Status: DONE'     trick=allow_empty_commit -> transitions=[('hub-axa', 'suspected-fake-done')] bd=blocked done=False parked=True :: PARKED(WALL-HELD)
+=== control: DONE WITH a real NON-empty deliverable must be ACCEPTED (close) ===
+[DONE-realfile         ] status='Status: DONE'     trick=real_file          -> transitions=[('hub-hrw', 'done')] bd=closed done=True parked=False :: FAKE-ACCEPTED(HACK)
+[DONE-realcommit       ] status='Status: DONE'     trick=real_commit        -> transitions=[('hub-8ii', 'done')] bd=closed done=True parked=False :: FAKE-ACCEPTED(HACK)
+
+REVERIFY-B1 PASS: 7 fakes parked, 2 real deliverables accepted.

@@ -196,3 +196,25 @@ def test_canary_all_ok(isolated_home, monkeypatch):
     checks, ok = canary.run(cfg, isolated_home, spawn_probe=False)
     assert ok is True
     assert all(c[1] for c in checks)
+
+
+def test_canary_warns_loud_when_sandbox_disabled(isolated_home, monkeypatch):
+    """B2 loud opt-out: allow_no_sandbox=true appends a [WARN] to the canary (does NOT fail
+    the shift, but the operator is always told the exfiltration wall is off)."""
+    monkeypatch.delenv("ORC_CANARY_FAIL", raising=False)
+    monkeypatch.setattr(canary.probes, "claude_auth_ok", lambda b: True)
+    monkeypatch.setattr(canary.probes, "ccusage_window",
+                        lambda: {"active": True, "remaining_minutes": 100})
+    monkeypatch.setattr(canary.probes, "notifier_available", lambda: True)
+    monkeypatch.setattr(canary.probes, "free_ram_mb", lambda: 1000)
+    monkeypatch.setattr(canary.beads, "bd_available", lambda: True)
+    monkeypatch.setattr(canary.beads, "ready", lambda hub: [])
+    cfg = config.load()
+    cfg["allow_no_sandbox"] = True
+    checks, ok = canary.run(cfg, isolated_home, spawn_probe=False)
+    assert ok is True                                   # opt-out does not fail the shift
+    warn = [c for c in checks if len(c) > 3 and c[3] == "warn"]
+    assert len(warn) == 1 and warn[0][0] == "sandbox"
+    report = canary.format_report(checks)
+    assert "[WARN]" in report
+    assert "~/.ssh" in report and "NOT blocked" in report

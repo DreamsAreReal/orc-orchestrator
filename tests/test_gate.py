@@ -91,6 +91,23 @@ def test_gate_card_degrades_on_bd_error(monkeypatch):
     assert "bd" in card                          # the degradation note names the cause
 
 
+def test_newspaper_shows_no_sandbox_banner(monkeypatch):
+    """B2 loud opt-out: when allow_no_sandbox is set the morning digest shows a bold ⚠
+    banner that the worker runs WITHOUT its exfiltration wall (not just the start canary)."""
+    monkeypatch.setattr(report, "_no_sandbox_active", lambda: True)
+    monkeypatch.setattr(report.probes, "ccusage_window",
+                        lambda: {"active": True, "remaining_minutes": 100})
+    state = shiftmod._empty()
+    shiftmod.mark_done(state, "t1", kind="done", spent=None)
+    out = report.newspaper(state, "hub")
+    assert "OS-песочница ОТКЛЮЧЕНА" in out  # "OS-песочница ОТКЛЮЧЕНА"
+    assert "~/.ssh" in out
+    # and the banner is ABSENT when the sandbox is on (default)
+    monkeypatch.setattr(report, "_no_sandbox_active", lambda: False)
+    out2 = report.newspaper(state, "hub")
+    assert "ОТКЛЮЧЕНА" not in out2  # "ОТКЛЮЧЕНА"
+
+
 def test_newspaper_degrades_on_bd_error_not_crash(monkeypatch):
     """P8: the whole newspaper must NOT crash when bd is down while a gate is parked --
     the signature morning digest prints what it can and flags the unavailable detail."""

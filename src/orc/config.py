@@ -53,9 +53,15 @@ DEFAULTS = {
     "sandbox_deny_network": False,
     # P5: fail-CLOSED on the sandbox. The seatbelt sandbox is the PRIMARY wall; if it would
     # NOT be applied (sandbox-exec unavailable, or sandbox=false) orc REFUSES to spawn an
-    # unsupervised worker rather than running it wall-less (fail-open). Set this True to
-    # deliberately run without the sandbox (recorded, not recommended). Default False =
-    # the wall must be present for an unattended shift.
+    # unsupervised worker rather than running it wall-less (fail-open).
+    #
+    # B2 threat-model note: the OS-sandbox is the ONLY layer that blocks reading ~/.ssh and
+    # direct-ssh / network exfiltration. The env-only credential strip does NOT stop a direct
+    # `ssh`/`scp` (a bare ssh uses the default identity path ~/.ssh, not the git transport;
+    # proven in docs/reviews/R-final-reverify.md). So setting allow_no_sandbox=true REMOVES
+    # the exfiltration wall entirely. It is therefore a LOUD opt-in: orc prints a [WARN] in
+    # the canary and a ⚠ banner in the newspaper at every shift start. NEVER use it for an
+    # unattended shift. Default False = the wall must be present.
     "allow_no_sandbox": False,
     "task_token_cap": 0,           # 0 = unlimited (F6 overrides)
     "shift_token_cap": 0,          # 0 = unlimited (F6)

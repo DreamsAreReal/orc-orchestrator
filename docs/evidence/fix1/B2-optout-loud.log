@@ -1,0 +1,7 @@
+=== B2-opt-out LOUD (allow_no_sandbox=true) ===
+canary: [WARN] sandbox: OS-sandbox DISABLED ... reading ~/.ssh and SSH/network exfiltration are NOT blocked
+newspaper: ⚠ ВНИМАНИЕ: OS-песочница ОТКЛЮЧЕНА ... чтение ~/.ssh и SSH/сетевая эксфильтрация НЕ заблокированы
+tests/test_gate.py::test_newspaper_shows_no_sandbox_banner PASSED        [ 50%]
+tests/test_skeleton.py::test_canary_warns_loud_when_sandbox_disabled PASSED [100%]
+
+============================== 2 passed in 0.01s ===============================

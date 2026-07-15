@@ -147,6 +147,36 @@ def test_poll_done_without_external_fact_is_parked(tmp_path, monkeypatch):
     assert [p["task"] for p in state.get("parked", [])] == ["t-1"]   # parked for the operator
 
 
+@pytest.mark.parametrize("trick", ["empty_touch", "allow_empty_commit"])
+def test_poll_done_parks_trivial_bypasses(tmp_path, monkeypatch, trick):
+    """B1 cycle-2: the two trivial bypasses the reverify found -- an EMPTY `touch out.txt`
+    and a `git commit --allow-empty` (0 diff) -- are token imitations of a fact, not facts.
+    poll_completions must PARK them (suspected fake-done), not close the task."""
+    import subprocess
+    import time as _t
+    proj = str(tmp_path)
+    subprocess.run(["git", "init", "-q", proj], check=True)
+    subprocess.run(["git", "-C", proj, "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-q", "--allow-empty", "-m", "base"], check=True)
+    _write_state(proj, "slug1", DONE_REAL)
+    monkeypatch.setattr(dispatcher, "_worker_slug", lambda hub, tid, p: "slug1")
+    monkeypatch.setattr(dispatcher.beads, "close", lambda hub, tid: pytest.fail("closed a fake"))
+    monkeypatch.setattr(dispatcher.beads, "set_status", lambda hub, tid, st: True)
+    monkeypatch.setattr(dispatcher.spawn, "close_worker", lambda cfg, wid, session=None: True)
+
+    state = _register(proj, "slug1", "t-1", "5000")
+    _t.sleep(1.1)   # the worker's started_epoch is now < the trick's timestamp
+    if trick == "empty_touch":
+        subprocess.run(["touch", os.path.join(proj, "out.txt")], check=True)
+    else:
+        subprocess.run(["git", "-C", proj, "-c", "user.email=t@t", "-c", "user.name=t",
+                        "commit", "--allow-empty", "-q", "-m", "done"], check=True)
+
+    state, tr = dispatcher.poll_completions(state, "hub")
+    assert tr == [("t-1", "suspected-fake-done")]
+    assert [p["task"] for p in state.get("parked", [])] == ["t-1"]
+
+
 def test_poll_gate_parks_and_keeps_window(tmp_path, monkeypatch):
     proj = str(tmp_path)
     _write_state(proj, "slug1", GATE_STATE)

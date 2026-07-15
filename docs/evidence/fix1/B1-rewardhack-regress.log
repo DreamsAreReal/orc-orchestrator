@@ -1,14 +1,9 @@
-created + claimed bd task: orc-e3rh-hub_R7ikVs-woy
+created + claimed bd task: orc-e3rh-hub_VBlCRu-b57
 worker wrote STATE.md claiming DONE; git HEAD unchanged, no deliverable file.
-transitions (fake-done): [('orc-e3rh-hub_R7ikVs-woy', 'suspected-fake-done')]
-bd status after poll: blocked
-recorded DONE in shift.json: False
-recorded PARKED (suspected-fake-done): True
-git HEAD before==after (no real work): True
+[B1 WALL HELD] fake DONE (zero-artifact) PARKED (suspected-fake-done), bd=blocked
+[B1 WALL HELD] fake DONE (empty-touch) PARKED (suspected-fake-done), bd=blocked
+[B1 WALL HELD] fake DONE (allow-empty-commit) PARKED (suspected-fake-done), bd=blocked
+--- control: real NON-empty deliverable + commit AFTER start ---
+[CONTROL OK] real DONE (non-empty commit) IS closed -- wall does not block real work.
 
-[B1 WALL HELD] fake DONE was PARKED (suspected-fake-done), bd NOT closed --
-   DONE is confirmed by the world, not the worker's self-report.
-
---- control: real deliverable + commit AFTER start ---
-transitions (real work): [('orc-e3rh-hub_R7ikVs-woy', 'done')] | bd status: closed | recorded DONE: True
-[CONTROL OK] real DONE (fresh commit) IS closed -- the wall does not block real work.
+[REWARD-HACK REGRESSION PASS]

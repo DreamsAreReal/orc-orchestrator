@@ -256,40 +256,53 @@ _ORC_MANAGED_PREFIXES = (".claude/", ".orc/", "docs/tasks/")
 
 
 def external_progress(project, since_epoch=None):
-    """Check REAL progress on disk, not the worker's self-report (design.md P6).
+    """Check REAL progress on disk, not the worker's self-report (design.md P6 / B1).
 
-    Returns True if the project shows genuine forward motion: a git commit newer than
-    since_epoch, or uncommitted changes staged/working (the worker is producing output).
-    A stuck worker that has made NO real change fails this -> safe to kill and restart, and
-    (B1) a worker that only wrote its own DONE-claiming STATE.md fails this too -> its DONE
-    is NOT trusted. orc-managed files (.claude/, .orc/, docs/tasks/) never count as the
-    worker's deliverable.
+    Returns True ONLY on a genuine, non-empty deliverable produced after the worker started:
+      - a git commit (newer than since_epoch) that changed at least one NON-empty file
+        outside the orc-managed scaffolding -- a `git commit --allow-empty` (0 diff) or a
+        commit that only rewrites the worker's own STATE.md does NOT count; OR
+      - an uncommitted NON-empty file outside the orc-managed scaffolding -- an empty
+        `touch out.txt` (size 0) does NOT count.
+    "Something appeared" (empty touch / empty commit / only STATE.md) is a token imitation
+    of a fact, not a fact -- exactly the reward-hacking bypass the reverify found. A worker
+    that produced NO real content fails this -> its DONE is parked "suspected-fake-done",
+    and (watchdog) a stuck worker that made no real change is safe to kill and restart.
     """
     from . import gitutil
     if not gitutil.is_repo(project):
-        # not a repo: fall back to "any recent file write under the project"
-        return _recent_file(project, since_epoch)
-    # a commit after the worker started = real checkpoint
-    last = gitutil.head_commit_epoch(project)
-    if last is not None and since_epoch is not None and last > since_epoch:
-        return True
-    # or uncommitted work in progress (dirty tree beyond our OWN orc-managed artifacts:
-    # a worker's own .claude/settings.json, .orc/ profile, or docs/tasks/ STATE.md is not
-    # a real deliverable and must not pass the external-fact gate -- B1 reward-hacking).
-    dirty = gitutil.dirty_paths(project)
-    foreign = [p for p in dirty if not p.startswith(_ORC_MANAGED_PREFIXES)]
-    return bool(foreign)
+        # not a repo: fall back to "a recent NON-empty file write under the project"
+        return _recent_nonempty_file(project, since_epoch)
+    # a commit after the worker started counts ONLY if it changed a real, non-empty file
+    # (rejects --allow-empty and STATE.md-only commits).
+    for rev in gitutil.commits_since(project, since_epoch):
+        if gitutil.commit_touches_real_files(project, rev,
+                                             exclude_prefixes=_ORC_MANAGED_PREFIXES):
+            return True
+    # or uncommitted work in progress: a NON-empty dirty file beyond our orc-managed
+    # artifacts. An empty touch or a STATE.md-only change is not a deliverable.
+    return gitutil.dirty_has_nonempty_file(project, exclude_prefixes=_ORC_MANAGED_PREFIXES)
 
 
-def _recent_file(project, since_epoch):
+def _recent_nonempty_file(project, since_epoch):
+    """Fallback for non-git projects: a NON-empty file written after since_epoch (B1).
+
+    An empty file (touch) never counts -- a real deliverable has content. orc-managed
+    scaffolding (.orc/ / .claude/ / docs/tasks/) is excluded so a worker cannot pass the
+    gate by (re)writing its own STATE.md, mirroring the git path's exclude_prefixes."""
+    root_real = os.path.realpath(project)
     if not os.path.isdir(project) or since_epoch is None:
         return False
     for root, _dirs, files in os.walk(project):
         if ".git" in root:
             continue
         for fn in files:
+            full = os.path.join(root, fn)
+            rel = os.path.relpath(full, root_real)
+            if rel.startswith(_ORC_MANAGED_PREFIXES):
+                continue
             try:
-                if os.path.getmtime(os.path.join(root, fn)) > since_epoch:
+                if os.path.getmtime(full) > since_epoch and os.path.getsize(full) > 0:
                     return True
             except OSError:
                 continue

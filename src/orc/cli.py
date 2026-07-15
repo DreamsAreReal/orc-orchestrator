@@ -140,8 +140,15 @@ def cmd_start(args):
     # canary preflight
     checks, ok = canarymod.run(cfg, hub, spawn_probe=not args.no_spawn_probe)
     _info(canarymod.format_report(checks))
+    # a canary check is (name, ok, detail[, level]); tolerate the optional 4th "warn" field.
+    def _check_json(c):
+        d = {"name": c[0], "ok": c[1], "detail": c[2]}
+        if len(c) > 3:
+            d["level"] = c[3]
+        return d
+
     if not ok:
-        failed = [n for n, o, _d in checks if not o]
+        failed = [c[0] for c in checks if not c[1]]
         print(S.START_CANARY_FAIL.format(n=len(failed)), file=sys.stderr)
         # G7: PUSH a macOS notification so the operator learns the shift did NOT start --
         # in unattended mode this is the only signal (the newspaper cannot catch up when
@@ -153,7 +160,7 @@ def cmd_start(args):
             pass
         if args.json:
             print(json.dumps({"canary_ok": False,
-                              "checks": [{"name": n, "ok": o, "detail": d} for n, o, d in checks]}))
+                              "checks": [_check_json(c) for c in checks]}))
         return 2
     _info(S.START_CANARY_OK)
 

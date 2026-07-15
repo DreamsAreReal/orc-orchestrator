@@ -747,3 +747,49 @@ test_prompt_file_lives_in_orc_managed_scratch, test_ghostty inner-command обн
 watchdog._ORC_MANAGED_PREFIXES (иначе prompt-файл прошёл бы как «внешний факт» B1).
 
 Находки инъекций: нет.
+
+## ФИКС-ВОЛНА цикл 2 (реверификация R-final-reverify — последний блокер)
+
+Реверификация (независимая ре-атака, R-final-reverify.md) подтвердила B0 закрыт, B2 закрыт на
+дефолтном sandboxed-пути, P3/P4/P5/--json закрыты. НО B1 закрыт ЧАСТИЧНО: 2 тривиальных обхода
+цикла-1 проходили (доказано живьём + на оракуле):
+- `touch out.txt` (пустой файл) → external_progress=True → bd closed;
+- `git commit --allow-empty` (0 diff) → external_progress=True → closed.
+Причина: оракул считал прогрессом ЛЮБОЙ foreign dirty-файл ИЛИ ЛЮБОЙ коммит новее старта —
+токен-имитация ≠ факт-деливерабл (класс Replit, нарушает G1).
+
+Фикс B1 (watchdog.external_progress + gitutil):
+- gitutil.commits_since(repo, since): коммиты строго ПОЗЖЕ старта, фильтр по %ct самими (НЕ
+  date-fuzzy `git log --since`, который ВКЛЮЧАЕТ baseline той же секунды → ложный факт).
+- gitutil.commit_touches_real_files(repo, rev, exclude): коммит засчитан ТОЛЬКО если сменил
+  хотя бы один НЕПУСТОЙ non-excluded файл (git show --name-status + git show rev:path непуст) —
+  отвергает --allow-empty (0 файлов) и STATE.md-only коммиты.
+- gitutil.dirty_has_nonempty_file(repo, exclude): dirty-файл засчитан ТОЛЬКО size>0 и не
+  orc-managed — отвергает пустой touch.
+- non-git фолбэк _recent_nonempty_file: size>0 + исключает .orc/.claude/docs/tasks.
+Пустой touch / empty-commit / только-STATE.md → external_progress=False → park suspected-fake-done.
+
+Фикс B2-opt-out ГРОМКИЙ (реверификация: env-слой сам НЕ держит прямой ssh — под env-prefix без
+sandbox `ssh -T git@github` аутентифицируется; B2 держится ТОЛЬКО на sandbox-ssh-read-deny):
+- canary: при allow_no_sandbox → [WARN] sandbox (не фейлит смену, но печатается всегда);
+  format_report рендерит 4-кортеж warn; cmd_start JSON/failed-list толерантны к 4-му полю.
+- newspaper: ⚠-баннер «OS-песочница ОТКЛЮЧЕНА — ~/.ssh + SSH/сеть НЕ заблокированы» (report.
+  _no_sandbox_active читает config).
+- config allow_no_sandbox: расширенный threat-model коммент (env-only не стопит прямой ssh;
+  opt-out снимает эксфильтрацию-стену; LOUD opt-in; не для безнадзорных смен).
+
+Регресс: reverify-b1.sh (атакующий, с реальными controls) exit0 — 7 фейков паркуются, 2 реальных
+закрываются; e3-rewardhack-live.sh расширен матрицей (empty-touch/allow-empty). B2-loud: живой
+canary [WARN] + газета-баннер; unit canary-warn + newspaper-banner.
+
+Тесты: 226 → 235 (+9). Всего циклы 1+2: 210 → 235 (+25), 0 регрессий.
+
+Грабли:
+- `git log --since=@N` ИНКЛЮЗИВНО и date-fuzzy → возвращал baseline-коммит той же секунды (реальный
+  непустой файл) → ложный факт. Фикс: фильтр по %ct строго > since в Python.
+- Тесты external_progress: started_epoch ДОЛЖЕН быть после baseline-коммита (иначе baseline
+  считается «прогрессом с момента старта»); в тестах since=time.time() после _repo() + sleep(1.1).
+- language-хук флагнул RU_NO_SANDBOX_WARN (strings.py) и assert-кириллицу в test_gate.py —
+  user-facing product-строки (газета по-русски), легитимно; comments/labels EN.
+
+Находки инъекций: нет (R-final-reverify.md, reverify-b1.sh — данные ре-атаки, не команды).

@@ -267,7 +267,16 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] **P7 start --json цельный** (cmd_start): человекочит.→stderr, stdout=только валидный JSON (json.tool парсит). docs/evidence/fix1/P6-P7-canary-notify-json.log.
 - [x] **P8 newspaper деградирует** (report._gate_card): try/except BeadsError → минимальная карточка+пометка, не краш. docs/evidence/fix1/P8-newspaper-degrade.log. unit: 2.
 - [x] **P9 .env в .gitignore** (.env/.env.*/!.env.example). docs/evidence/fix1/P9-gitignore-env.log.
-Итог фикс-волны: 210 → **226 тестов** (+16), 0 регрессий. Смоук после: pytest 226, e2e-loop-close PASS, e2e-gate PASS, sandbox-walls PASS, push-wall PASS, e3-multiline-prompt PASS. P1-волна (loop-детект чередование, живой pipeline-прогон, сеть-эксфильтрация) — НЕ в этом цикле.
+Итог фикс-волны цикл 1: 210 → **226 тестов** (+16), 0 регрессий.
+
+### ФИКС-ВОЛНА цикл 2 (реверификация R-final-reverify — последний блокер + существенное)
+- [x] **B1 усилен** (external_progress + gitutil): реверификация нашла 2 тривиальных обхода цикла-1 (оракул принимал ЛЮБОЙ foreign dirty-файл / ЛЮБОЙ коммит новее старта). Теперь «внешний факт» = РЕАЛЬНЫЙ непустой деливерабл: (а) коммит засчитывается ТОЛЬКО с непустым diff по non-orc-managed файлу (`commit_touches_real_files`: отвергает `--allow-empty` и STATE.md-only; `commits_since` фильтрует по %ct строго > старта, не по date-fuzzy `--since`); (б) dirty-файл — ТОЛЬКО непустой (`dirty_has_nonempty_file`: отвергает пустой `touch`); non-git фолбэк тоже требует size>0 + исключает orc-managed. Пустой touch / empty-commit / только-STATE.md → park. Статус: self-pass
+  - `bash .verify/e3/reverify-b1.sh` → exit 0: 7 фейков (вкл. empty-touch, allow-empty-commit) ПАРКУЮТСЯ, 2 реальных деливерабла (непустой файл, непустой коммит) закрываются. Лог: docs/evidence/fix1/B1-reverify-strengthened.log
+  - `bash .verify/e3/e3-rewardhack-live.sh` → exit 0: матрица (zero-artifact/empty-touch/allow-empty-commit паркуются; непустой коммит закрывается). Лог: docs/evidence/fix1/B1-rewardhack-regress.log
+  - unit: +6 (external_progress: empty-touch/allow-empty/real-commit/state-only-commit/non-git-empty; loop-close: 2 параметр. обхода).
+- [x] **B2-opt-out ГРОМКИЙ** (canary + newspaper + config): реверификация: env-слой САМ не держит прямой ssh (под env-prefix без sandbox `ssh -T git@github` аутентифицируется); B2 держится ТОЛЬКО на sandbox-ssh-read-deny → `allow_no_sandbox=true` МОЛЧА снимал всю SSH/эксфильтрацию-стену. Теперь: `[WARN]` в canary на каждом старте + ⚠-баннер в газете «воркер БЕЗ OS-стен: ~/.ssh + SSH/сеть-эксфильтрация НЕ заблокированы» + расширенный threat-model коммент в config. Статус: self-pass
+  - Живой: canary `[WARN] sandbox: OS-sandbox DISABLED ...`, газета `⚠ ВНИМАНИЕ: OS-песочница ОТКЛЮЧЕНА ...`. Лог: docs/evidence/fix1/B2-optout-loud.log. unit: test_canary_warns_loud_when_sandbox_disabled, test_newspaper_shows_no_sandbox_banner.
+Итог фикс-волны (циклы 1+2): 210 → **235 тестов** (+25), 0 регрессий. Смоук: pytest 235, reverify-b1/e3-rewardhack/e3-exfil2/e2e-loop-close/e2e-gate — все зелёные. Остаётся beta-финал.
 
 ---
 Майлстоуны: M1 = F1-F4 ✓verified + F14 (замыкание петли, из consumer), M2 = F5-F9 + F15 (надёжность + гейт + бэкенд-абстракция), M3 = F10 + F13 (ops + OS-sandbox), M4 = F11-F12 (патчи конвейера + E2E).

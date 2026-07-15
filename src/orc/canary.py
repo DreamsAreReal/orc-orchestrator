@@ -69,6 +69,13 @@ def run(cfg, hub, spawn_probe=True):
         detail = "osascript terminal spawn ok" if ok else "terminal spawn blocked / forced-fail"
         checks.append(("spawn", ok, detail))
 
+    # B2 opt-out is LOUD: if the OS-sandbox is disabled (allow_no_sandbox), append a WARN
+    # check. It does NOT fail the shift (the opt-out is deliberate) but it is always printed,
+    # so the operator is told at every start that the exfiltration wall is off. A warn is
+    # encoded as (name, ok=True, detail, "warn"); plain checks stay 3-tuples.
+    if cfg.get("allow_no_sandbox"):
+        checks.append(("sandbox", True, S.CANARY_NO_SANDBOX_DETAIL, "warn"))
+
     all_ok = all(c[1] for c in checks)
     return checks, all_ok
 
@@ -87,9 +94,17 @@ def _probe_terminal():
 
 
 def format_report(checks):
-    """Human-readable canary report (en; operator terminal)."""
+    """Human-readable canary report (en; operator terminal).
+
+    A check is (name, ok, detail) or (name, ok, detail, "warn"). A warn is rendered [WARN]
+    and does not fail the shift, but is always shown (B2 loud opt-out)."""
     lines = [S.CANARY_HEADER]
-    for name, ok, detail in checks:
-        tmpl = S.CANARY_LINE_OK if ok else S.CANARY_LINE_FAIL
+    for c in checks:
+        name, ok, detail = c[0], c[1], c[2]
+        level = c[3] if len(c) > 3 else None
+        if level == "warn":
+            tmpl = S.CANARY_LINE_WARN
+        else:
+            tmpl = S.CANARY_LINE_OK if ok else S.CANARY_LINE_FAIL
         lines.append(tmpl.format(name=name, detail=detail))
     return "\n".join(lines)

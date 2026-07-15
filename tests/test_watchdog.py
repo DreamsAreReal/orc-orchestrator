@@ -151,6 +151,77 @@ def test_external_progress_false_when_nothing_changed(tmp_path):
     assert watchdog.external_progress(repo, since_epoch=time.time() + 10) is False
 
 
+def test_external_progress_false_on_empty_touch(tmp_path):
+    """B1 cycle-2: an EMPTY `touch out.txt` is a token, not a deliverable -> no progress.
+    (reverify found this bypassed the first fix, which accepted any foreign dirty file.)"""
+    import subprocess
+    repo = _repo(str(tmp_path / "touch"))
+    since = time.time()               # worker starts AFTER the baseline commit
+    time.sleep(1.1)
+    subprocess.run(["touch", os.path.join(repo, "out.txt")], check=True)  # empty file
+    assert watchdog.external_progress(repo, since_epoch=since) is False
+    # control: a non-empty dirty file IS progress
+    with open(os.path.join(repo, "real.txt"), "w") as f:
+        f.write("x\n")
+    assert watchdog.external_progress(repo, since_epoch=since) is True
+
+
+def test_external_progress_false_on_allow_empty_commit(tmp_path):
+    """B1 cycle-2: `git commit --allow-empty` (0 diff) is a token, not a deliverable."""
+    import subprocess
+    repo = _repo(str(tmp_path / "emptycommit"))
+    since = time.time()
+    time.sleep(1.1)  # the empty commit is strictly newer than `since`
+    subprocess.run(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "--allow-empty", "-q", "-m", "done"], check=True)
+    assert watchdog.external_progress(repo, since_epoch=since) is False
+
+
+def test_external_progress_true_on_real_nonempty_commit(tmp_path):
+    """Control: a commit that adds a NON-empty file IS real progress (no false wall)."""
+    import subprocess
+    repo = _repo(str(tmp_path / "realcommit"))
+    since = time.time()
+    time.sleep(1.1)
+    with open(os.path.join(repo, "feature.py"), "w") as f:
+        f.write("def f():\n    return 1\n")
+    subprocess.run(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t",
+                    "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-q", "-m", "real"], check=True)
+    assert watchdog.external_progress(repo, since_epoch=since) is True
+
+
+def test_external_progress_false_when_commit_only_touches_orc_managed(tmp_path):
+    """A commit that only rewrites the worker's own docs/tasks/STATE.md is not a deliverable."""
+    import subprocess
+    repo = _repo(str(tmp_path / "stateonly"))
+    since = time.time()
+    time.sleep(1.1)
+    sd = os.path.join(repo, "docs", "tasks", "s")
+    os.makedirs(sd, exist_ok=True)
+    with open(os.path.join(sd, "STATE.md"), "w") as f:
+        f.write("# STATE\nStatus: DONE\n")
+    subprocess.run(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t",
+                    "add", "-A"], check=True)
+    subprocess.run(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-q", "-m", "state"], check=True)
+    assert watchdog.external_progress(repo, since_epoch=since) is False
+
+
+def test_external_progress_false_on_empty_touch_non_git(tmp_path):
+    """Non-git fallback: an empty file written after start is still not a deliverable."""
+    import subprocess
+    proj = str(tmp_path / "nongit")
+    os.makedirs(proj)
+    since = time.time() - 10
+    subprocess.run(["touch", os.path.join(proj, "empty.txt")], check=True)
+    assert watchdog.external_progress(proj, since_epoch=since) is False
+    with open(os.path.join(proj, "real.txt"), "w") as f:
+        f.write("content\n")
+    assert watchdog.external_progress(proj, since_epoch=since) is True
+
+
 # --------------------------------------------------------------------------- #
 # bounded recovery: restart only after external check, cap -> escalate
 # --------------------------------------------------------------------------- #
