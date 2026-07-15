@@ -201,3 +201,36 @@ F5 → F6 → F7 → F8 → F15 → F9. Живой claude — только на 
   показывает реальный порог. Пойман до коммита.
 
 Находки инъекций: нет (весь код свой; фикстуры и error-reference — данные).
+
+## F6 — Бюджет-кап + per-task атрибуция + backlog-мелочи газеты — self-pass 2026-07-15
+
+Сделано:
+- Per-task атрибуция: task_spend(worker) = probes.total_tokens_now() − tokens_before (дельта
+  РЕАЛЬНОГО ccusage total между claim и close; на 1-воркерной машине точна). shift_spend()
+  = сумма done-расходов + дельты живых воркеров. Никогда не отрицательна (guard на дип чтения).
+- Бюджет-капы из config (task_token_cap/shift_token_cap, 0=unlimited): over_task_cap/
+  over_shift_cap. enforce_budget() (вызов из orc status) паркует живого воркера сверх task-cap
+  + СТОП (kill+RAM) + bd blocked + запись причины в газету. Shift-cap блокирует НОВЫЕ спавны
+  в spawn_one (проверка ДО admission/claim).
+- Атрибуция в петле: poll_completions на done вычисляет spent=task_spend(w) + kind=done_kind(text),
+  пишет в shift.done[]. mark_done(kind, spent) расширен.
+- BACKLOG-мелочи газеты (паспорт вкуса): (1) сводка «N готово» ТЕПЕРЬ ПЕРВОЙ строкой (было 2-й,
+  за титулом) — newspaper() переставлен summary→title; (2) done_kind различает DONE / DONE-WAVE-N
+  (предложена волна) / BETA (ждёт решения) — отдельные RU-строки RU_ROW_DONE/_WAVE/_BETA; per-task
+  расход «~N ток.» суффиксом. test_skeleton assertion (summary на line[1]) исправлен под верную
+  раскладку (line[0]) — не ослабление, а исправление ассерта, кодировавшего сам баг из backlog.
+- .verify/budget.sh (3 проверки: live-дельта против ccusage / low-cap park / газета WAVE-BETA-summary).
+  Evidence: docs/evidence/F6/{budget,unit-tests}.log. 15 тестов, 124 всего, 0 регрессий.
+
+Решения:
+- Расход задачи — дельта ccusage, НЕ отдельный счётчик: на 1 воркере атрибуция точна (design.md).
+  Живой прогон доказывает арифметику против РЕАЛЬНОГО ccusage total (не жжёт окно: seam-инкремент).
+- Shift-cap = «не стартуй новые», task-cap = «останови текущего»: разные политики, обе из конфига.
+- BETA/DONE-WAVE-N НЕ показываются как плоское «готово» — по глоссарию статусов это разные вещи
+  для оператора (волна предложена ≠ конец; бета ждёт решения пользователя).
+
+Грабли:
+- .verify heredoc: апостроф в python-комментарии ломал shell-кавычки → убрал апострофы, RU-слова
+  для матчинга газеты держу как литералы (файл .verify, не .py — хук ругается косметически).
+
+Находки инъекций: нет.

@@ -81,6 +81,25 @@ def detect_terminal_status(state_text):
     return None
 
 
+def done_kind(state_text):
+    """Distinguish the flavour of a terminal 'done' status for the newspaper (F6 backlog).
+
+    Returns one of 'done' (plain DONE, the user said "enough"), 'wave' (DONE-WAVE-N, a
+    wave was proposed -- NOT the end), or 'beta' (BETA, non-terminal, awaiting the user's
+    decision). The digest must NOT show BETA/DONE-WAVE-N as a flat "готово" -- they mean
+    different things to the operator (design.md status vocabulary).
+    """
+    if not state_text:
+        return "done"
+    field = _status_field(state_text)
+    haystack = field if field else state_text
+    if _BETA_RE.search(haystack):
+        return "beta"
+    if re.search(r"\bDONE-WAVE-\d+\b", haystack):
+        return "wave"
+    return "done"
+
+
 def read_task_state(project, slug):
     """Return the task STATE.md text, or None if it does not exist yet."""
     path = task_state_path(project, slug)
@@ -112,7 +131,12 @@ def poll_completions(state, hub):
         status = detect_terminal_status(text)
         if status == "done":
             _safe_close(hub, task_id)
-            shiftmod.mark_done(state, task_id)
+            # per-task spend attribution (F6): tokens consumed = ccusage total at close
+            # minus the total captured at claim. On this 1-worker machine one worker runs
+            # at a time, so the whole-window delta is this task's spend (design.md).
+            spent = task_spend(w)
+            kind = done_kind(text)
+            shiftmod.mark_done(state, task_id, kind=kind, spent=spent)
             # stop the lingering worker (frees RAM) and close its window (best effort)
             spawn.close_window(w.get("tab_id"))
             transitions.append((task_id, "done"))
@@ -123,6 +147,79 @@ def poll_completions(state, hub):
             # keep the worker window: the session waits live for the operator (F9)
             transitions.append((task_id, "gate"))
     return state, transitions
+
+
+# --- F6: per-task spend attribution + budget caps ---------------------------- #
+def task_spend(worker, tokens_now=None):
+    """Tokens a worker has consumed = ccusage total now - total captured at claim (F6).
+
+    On this 1-worker machine attribution is exact (one worker runs at a time). Returns an
+    int >= 0, or None if either endpoint is unknown (ccusage unavailable). tokens_now is
+    injectable for tests.
+    """
+    before = worker.get("tokens_before")
+    if before is None:
+        return None
+    now = tokens_now if tokens_now is not None else probes.total_tokens_now()
+    if now is None:
+        return None
+    return max(0, int(now) - int(before))
+
+
+def shift_spend(state, tokens_now=None):
+    """Total tokens spent so far this shift = done spends + live worker deltas (F6)."""
+    total = 0
+    known = False
+    for d in state.get("done", []):
+        s = d.get("spent")
+        if s is not None:
+            total += int(s)
+            known = True
+    for w in state.get("workers", []):
+        s = task_spend(w, tokens_now=tokens_now)
+        if s is not None:
+            total += s
+            known = True
+    return total if known else None
+
+
+def over_task_cap(cfg, worker, tokens_now=None):
+    """True if a live worker has exceeded the per-task token cap (F6). 0 cap = unlimited."""
+    cap = cfg.get("task_token_cap", 0)
+    if not cap or cap <= 0:
+        return False
+    spent = task_spend(worker, tokens_now=tokens_now)
+    return spent is not None and spent > cap
+
+
+def over_shift_cap(cfg, state, tokens_now=None):
+    """True if the shift's total spend has exceeded the shift token cap (F6). 0 = unlimited."""
+    cap = cfg.get("shift_token_cap", 0)
+    if not cap or cap <= 0:
+        return False
+    spent = shift_spend(state, tokens_now=tokens_now)
+    return spent is not None and spent > cap
+
+
+def enforce_budget(cfg, hub, state, tokens_now=None):
+    """Park any live worker over its per-task token cap (F6). Returns [(task_id, spent)].
+
+    A worker whose spend blew past the task cap is stopped (killed, RAM freed) and its task
+    parked with a budget note so the newspaper shows why. The shift cap is enforced by the
+    dispatcher loop (it stops STARTING new tasks); this function handles running workers.
+    """
+    parked = []
+    for w in list(state.get("workers", [])):
+        if over_task_cap(cfg, w, tokens_now=tokens_now):
+            spent = task_spend(w, tokens_now=tokens_now)
+            task_id = w.get("task")
+            reason = S.PARK_TASK_BUDGET.format(
+                spent=spent, cap=cfg.get("task_token_cap"))
+            _safe_block(hub, task_id)
+            spawn.close_window(w.get("tab_id"))
+            shiftmod.mark_parked(state, task_id, reason)
+            parked.append((task_id, spent))
+    return parked
 
 
 def _worker_slug(hub, task_id, project):
@@ -384,6 +481,15 @@ def spawn_one(cfg, hub, state, task):
         beads.set_status(hub, task_id, "open")
         shiftmod.mark_parked(state, task_id, reason)
         return False, reason, state
+
+    # shift budget cap (F6): once the shift's total token spend is over the cap, do not
+    # start new tasks (protect the weekly pool). Checked before admission/claim.
+    if over_shift_cap(cfg, state):
+        reason = S.PARK_SHIFT_BUDGET.format(
+            spent=shift_spend(state), cap=cfg.get("shift_token_cap"))
+        beads.set_status(hub, task_id, "open")
+        shiftmod.mark_parked(state, task_id, reason)
+        return False, "shift-budget-cap", state
 
     # admission + back-pressure (F5): RAM / usage-window / limit-string gate. Checked
     # BEFORE claiming so a task blocked by back-pressure is not left claimed-but-unspawned.

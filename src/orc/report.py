@@ -108,10 +108,15 @@ def live_status(state, hub, window=None, ready_tasks=None):
 
 
 def newspaper(state, hub, window=None):
-    """The completion newspaper. First line summary, then sections, then gate cards."""
+    """The completion newspaper. First line summary, then sections, then gate cards.
+
+    Taste passport / design.md signature: the ONE-SENTENCE SUMMARY is the very first line
+    (grep-able "N done" up top), the decorative title follows. This is the backlog fix
+    from F14 (the summary used to sit on line 2 behind the title).
+    """
     if window is None:
         window = probes.ccusage_window()
-    lines = [S.RU_REPORT_TITLE, summary_line(state), ""]
+    lines = [summary_line(state), S.RU_REPORT_TITLE, ""]
 
     parked = state.get("parked", [])
     done = state.get("done", [])
@@ -143,7 +148,7 @@ def newspaper(state, hub, window=None):
     if done:
         lines.append(S.RU_SECTION_DONE)
         for d in done:
-            lines.append(S.RU_ROW_DONE.format(id=d.get("task")))
+            lines.append(_done_row(d))
         lines.append("")
 
     if failed:
@@ -151,6 +156,26 @@ def newspaper(state, hub, window=None):
             lines.append(S.RU_ROW_FAILED.format(id=fl.get("task"), reason=fl.get("reason", "")))
 
     return "\n".join(lines).rstrip()
+
+
+def _spend_suffix(entry):
+    """Render the per-task spend suffix (F6), empty when spend is unknown."""
+    spent = entry.get("spent")
+    if spent is None:
+        return ""
+    return S.RU_SPEND_SUFFIX.format(spent=spent)
+
+
+def _done_row(entry):
+    """Render a completed-task row differentiating DONE / DONE-WAVE-N / BETA (F6)."""
+    task_id = entry.get("task")
+    spend = _spend_suffix(entry)
+    kind = entry.get("kind", "done")
+    if kind == "beta":
+        return S.RU_ROW_BETA.format(id=task_id, spend=spend)
+    if kind == "wave":
+        return S.RU_ROW_DONE_WAVE.format(id=task_id, spend=spend)
+    return S.RU_ROW_DONE.format(id=task_id, spend=spend)
 
 
 def _gate_card(hub, parked_entry):

@@ -93,6 +93,15 @@ RETRY_TRANSIENT = (
     "transient {kind} throttle; retrying without parking (not a usage-limit stop)."
 )
 
+# --- budget caps (F6) reasons (en; operator terminal) ---
+PARK_TASK_BUDGET = (
+    "parked: task exceeded its token budget ({spent} > cap {cap}). "
+    "Stopped the worker to protect the weekly pool; review before resuming."
+)
+PARK_SHIFT_BUDGET = (
+    "shift token cap reached ({spent} >= cap {cap}); not starting new tasks."
+)
+
 
 # --- Canary check labels (en; operational preflight report) ---
 CANARY_HEADER = "=== canary preflight ==="
@@ -108,7 +117,12 @@ RU_SECTION_QUEUED = "── в очереди (смена не запущена,
 RU_ROW_QUEUED = "  • {id}  {project}"
 RU_ROW_RUNNING = "  ▸ {id}  {phase:<10} {status:<8} {mins}м  {tokens}"
 RU_ROW_WAITING = "  ⏸ {id}  ждёт тебя: {reason}"
-RU_ROW_DONE = "  ✓ {id}  готово"
+# Done rows differentiate the terminal kind (design.md status vocabulary): plain DONE is
+# finished; DONE-WAVE-N proposed another wave (not the end); BETA awaits your decision.
+RU_ROW_DONE = "  ✓ {id}  готово{spend}"
+RU_ROW_DONE_WAVE = "  ✓ {id}  готово (предложена волна){spend}"
+RU_ROW_BETA = "  ◐ {id}  бета — ждёт твоего решения{spend}"
+RU_SPEND_SUFFIX = "  ~{spent} ток."
 RU_ROW_FAILED = "  ✗ {id}  упало: {reason}"
 RU_POOL_LINE = "  пул: {pct}% окна, {mins_left} мин осталось, RAM {ram}"
 RU_SECTION_GATES = "── ждут твоего решения ──"

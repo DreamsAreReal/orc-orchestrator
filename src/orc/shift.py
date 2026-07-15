@@ -88,10 +88,12 @@ def remove_worker(state, task):
     return state
 
 
-def mark_done(state, task):
+def mark_done(state, task, kind="done", spent=None):
+    """Record a completed task. `kind` distinguishes DONE / DONE-WAVE-N (wave) / BETA so the
+    newspaper can show them differently (F6). `spent` is the per-task token spend (F6)."""
     remove_worker(state, task)
     if not any(d.get("task") == task for d in state["done"]):
-        state["done"].append({"task": task, "ts": _now_iso()})
+        state["done"].append({"task": task, "ts": _now_iso(), "kind": kind, "spent": spent})
     return state
 
 

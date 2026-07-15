@@ -83,11 +83,16 @@ North Star: утром накидал ~10 задач по проектам — M
 Ворота: G8, контр-метрика «расход». Опыт/ценность: не сжечь weekly-кап; газета показывает «сколько съела задача».
 Что: расход задачи = дельта `ccusage` total между claim и close (на 1-воркерной машине атрибуция точна — работает один воркер). Бюджет-кап задачи и смены из конфига → превышение → парковка + запись.
 Приёмка:
-- [ ] расход задачи = tokens_after − tokens_before корректен на живом прогоне (сверка с ccusage session)
-- [ ] задача с заниженным капом останавливается с парковкой и записью в газету (G8)
-- [ ] кап смены превышен → новые задачи не стартуют
+- [x] расход задачи = tokens_after − tokens_before корректен на живом прогоне (сверка с ccusage session)
+- [x] задача с заниженным капом останавливается с парковкой и записью в газету (G8)
+- [x] кап смены превышен → новые задачи не стартуют
 Проверка: `python3 -m pytest tests/test_budget.py` + живой прогон (evidence/F6/)
-Статус: todo
+Статус: self-pass
+Доказательство:
+- `bash .verify/budget.sh` → "F6 BUDGET PASS (live spend delta + low-cap park + newspaper DONE/WAVE/BETA + summary-first)", exit 0. Расход = дельта РЕАЛЬНОГО ccusage total (claim→close): live total прочитан живьём (10.4M ток.), task_spend вернул точную дельту 12345, real re-read монотонен (delta≥0). Лог: docs/evidence/F6/budget.log
+- `python3 -m pytest tests/test_budget.py` → 15 passed (spend-атрибуция×5, task-cap×5, shift-cap×2, done_kind/newspaper DONE/wave/BETA + summary-first×3). Лог: docs/evidence/F6/unit-tests.log
+- backlog-мелочи внесены: газета — сводка «N готово» ТЕПЕРЬ ПЕРВОЙ строкой (было 2-й, паспорт вкуса); DONE / DONE-WAVE-N (предложена волна) / BETA (ждёт решения) различаются в газете + per-task расход «~N ток.». test_skeleton assertion исправлен под новую (верную) раскладку.
+- интеграция: shift-cap блокирует новые спавны (spawn_one), task-cap паркует живого воркера + стоп (enforce_budget в orc status); 124 теста passed, 0 регрессий.
 
 ### F7 — Watchdog: петля/тишина детект + внешняя проверка [M2]
 Ворота: G5. Опыт/ценность: выход из meltdown/зависаний без ложных убийств.

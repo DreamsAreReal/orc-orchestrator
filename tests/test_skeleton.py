@@ -130,9 +130,11 @@ def test_newspaper_summary_first_and_word_cap(isolated_home, monkeypatch):
     shiftmod.mark_parked(st, "t2", "gate")
     news = report.newspaper(st, isolated_home)
     lines = news.splitlines()
-    assert lines[0] == S.RU_REPORT_TITLE
-    assert "смена:" in lines[1]  # summary is the first content line
-    assert "50%" in lines[1]      # (300-150)/300 = 50%
+    # F6 backlog fix (taste passport): the one-sentence SUMMARY is the very first line,
+    # the decorative title follows it (previously the title sat on line 1, summary on 2).
+    assert "смена:" in lines[0]   # summary is now THE first line
+    assert "50%" in lines[0]      # (300-150)/300 = 50%
+    assert lines[1] == S.RU_REPORT_TITLE
     assert len(news.split()) <= 150
 
 

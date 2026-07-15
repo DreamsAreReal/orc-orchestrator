@@ -175,8 +175,12 @@ def cmd_status(args):
     # so the transition is durable and not recomputed every view.
     hub_ready = os.path.isdir(os.path.join(hub, ".beads"))
     if hub_ready and state.get("workers"):
+        cfg = config.load()
+        # F6: park any live worker over its per-task token budget before rendering, so the
+        # newspaper shows the budget parking (protecting the weekly pool).
+        budget_parked = dispatcher.enforce_budget(cfg, hub, state)
         state, transitions = dispatcher.poll_completions(state, hub)
-        if transitions:
+        if transitions or budget_parked:
             shiftmod.save(state)
 
     # The ready queue (tasks added but not yet started) — shown when no shift is running.
