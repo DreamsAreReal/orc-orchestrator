@@ -56,11 +56,14 @@ North Star: утром накидал ~10 задач по проектам — M
 Ворота: G3, часть G12. Опыт/ценность: сердце автономии; project-mutex + порядок = «по умному».
 Что: цикл `bd ready --json` (сорт: гейтовые/ждущие-человека в конец) → claim → re-validate ТЗ-дельты (продуктовый слой изменился → пометка) → preflight (чистое git-дерево; грязное «не наше» → парковка) → project-mutex (1 задача/репо, 1 воркер) → spawn → регистрация PID в shift.json. **Арбитр рассинхрона: bd = правда о задачах, shift.json = правда о процессах; расхождение → bd важнее, shift.json чинится по bd + живым PID.**
 Приёмка:
-- [ ] две задачи одного проекта НЕ идут одновременно (интервалы активности не пересекаются) (G3)
-- [ ] грязное git-дерево «не наше» → задача паркуется с причиной; re-validate: изменённый продуктовый слой после claim → пометка в STATE задачи
-- [ ] гейтовые задачи спавнятся ПОСЛЕ автономных (сортировка в конец)
+- [x] две задачи одного проекта НЕ идут одновременно (интервалы активности не пересекаются) (G3)
+- [x] грязное git-дерево «не наше» → задача паркуется с причиной; re-validate: изменённый продуктовый слой после claim → пометка в STATE задачи
+- [x] гейтовые задачи спавнятся ПОСЛЕ автономных (сортировка в конец)
 Проверка: `python3 -m pytest tests/test_dispatcher.py` (моки bd + git-фикстуры)
-Статус: todo
+Статус: self-pass
+Доказательство:
+- `python3 -m pytest tests/test_dispatcher.py` → 11 passed (preflight×4, revalidate×3, mutex, dirty-park, reconcile×2). Лог: docs/evidence/F4/unit-tests.log
+- `bash .verify/dispatcher-core.sh` → "F4 DISPATCHER-CORE PASS", exit 0 (live: G3 1-spawn/проект + mutex-refuse; dirty-park с причиной, bd status open; gate-order AUTO AUTO GATE). Лог: docs/evidence/F4/dispatcher-core.log
 
 ### F5 — Admission + back-pressure (лимиты/RAM) [M2]
 Ворота: G4, G12. Опыт/ценность: тратить недоиспользуемый пул безопасно.

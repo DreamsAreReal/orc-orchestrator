@@ -1,0 +1,19 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0 -- /Library/Developer/CommandLineTools/usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /Users/admin/orchestrator
+collecting ... collected 11 items
+
+tests/test_dispatcher.py::test_preflight_clean_repo_ok PASSED            [  9%]
+tests/test_dispatcher.py::test_preflight_not_a_repo_parks PASSED         [ 18%]
+tests/test_dispatcher.py::test_preflight_dirty_foreign_parks PASSED      [ 27%]
+tests/test_dispatcher.py::test_preflight_dirty_only_our_settings_ok PASSED [ 36%]
+tests/test_dispatcher.py::test_revalidate_notes_product_change PASSED    [ 45%]
+tests/test_dispatcher.py::test_revalidate_skips_when_no_baseline PASSED  [ 54%]
+tests/test_dispatcher.py::test_record_revalidate_note_writes_state PASSED [ 63%]
+tests/test_dispatcher.py::test_mutex_refuses_second_same_project PASSED  [ 72%]
+tests/test_dispatcher.py::test_spawn_one_parks_dirty_project PASSED      [ 81%]
+tests/test_dispatcher.py::test_reconcile_drops_dead_worker PASSED        [ 90%]
+tests/test_dispatcher.py::test_reconcile_keeps_live_worker PASSED        [100%]
+
+============================== 11 passed in 0.98s ==============================

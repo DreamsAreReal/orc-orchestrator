@@ -88,3 +88,35 @@
 - нет; add/status/batch/json уже были заложены в F2, F3 добавил покрытие+тайминг.
 
 Находки инъекций: нет.
+
+## F4 — Диспетчер-ядро: ready→claim→re-validate→preflight→mutex→spawn [золотой путь] — self-pass 2026-07-15
+
+Сделано:
+- gitutil.py: is_repo/dirty_paths(-uall)/head_rev/product_layer_rev — тонкие обёртки git -C.
+- dispatcher: preflight (не-repo → park; грязное «не наше» дерево → park «человек в репо?»;
+  дерево грязное ТОЛЬКО нашим .claude/settings.json → ok), revalidate (docs/ изменился после
+  product_rev задачи → нота в docs/tasks/<slug>/STATE.md, R5), reconcile (арбитр: мёртвый PID →
+  воркер дропается, задача в ready через reopen/lease; живой — подхватывается).
+- spawn_one порядок: mutex(до claim) → preflight → claim → revalidate → walls → spawn.
+- cli: product_rev пишется в metadata на add; cmd_start вызывает reconcile до ordering.
+- tests/test_dispatcher.py (11, реальные temp git-repo + моки bd/spawn): preflight×4,
+  revalidate×3, mutex/serialization, dirty-park, reconcile×2. .verify/dispatcher-core.sh:
+  G3 (1 spawn/проект, остальные mutex), dirty-park, gate-order — все live PASS.
+
+Решения:
+- Серификация G3 = project-mutex проверяется ДО claim (не claim'им, если проект занят) —
+  интервалы активности двух задач одного репо не пересекаются по построению.
+- git porcelain по умолчанию сворачивает untracked-каталог в «.claude/» → перешёл на -uall
+  (файловая гранулярность), чужой файл в новом каталоге не прячется за нашим artifact.
+- reconcile: mark-done воркеров НЕ делает (нет ещё monitor-петли, это F7); он чинит
+  рассинхрон процессов при старте/дрейфе. bd важнее shift.json при расхождении.
+
+Грабли:
+- test «грязно только нашим settings.json» упал: porcelain сворачивал .claude/ → чинилось
+  -uall + расширил _OURS_PREFIXES (.claude/). После — зелёный.
+
+Находки инъекций: нет.
+
+## МАЙЛСТОУН M1 ДОСТИГНУТ (F1-F4 self-pass) 2026-07-15
+Смоук золотого пути (F1 walls + F2 skeleton + F4 core) — зелёный; 68 тестов passed.
+Команда запуска продукта: `bin/orc {init|add <proj> "<text>" [-p N] [--gate] [--batch]|start [--once]|status [--newspaper]} [--json]`

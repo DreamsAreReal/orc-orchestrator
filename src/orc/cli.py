@@ -15,6 +15,7 @@ from . import dispatcher
 from . import canary as canarymod
 from . import report as reportmod
 from . import probes
+from . import gitutil
 from . import strings as S
 
 
@@ -49,6 +50,11 @@ def _add_one(hub, project, text, priority, gate=False):
     slug = _slugify(text, fallback="task")
     labels = ["orc"] + (["gate"] if gate else [])
     meta = {"project": project, "slug": slug, "text": text.strip()}
+    # capture the product-layer rev at add time so the dispatcher can re-validate the
+    # plan against later docs/ changes (R5). None if the project is not a git repo yet.
+    prod_rev = gitutil.product_layer_rev(project) if gitutil.is_repo(project) else None
+    if prod_rev:
+        meta["product_rev"] = prod_rev
     if gate:
         meta["gate"] = True
     issue_id = beads.create(hub, text.strip(), priority=priority, labels=labels, metadata=meta)
@@ -124,6 +130,11 @@ def cmd_start(args):
 
     # single-shift path (F2 skeleton): claim + spawn the top ready task
     state = shiftmod.load()
+    # reconcile shift.json against live PIDs + bd (F4 arbiter): drop dead workers,
+    # their tasks return to ready via lease before we compute what to spawn.
+    state, dropped = dispatcher.reconcile(state, hub)
+    for tid in dropped:
+        print("reconcile: dropped dead worker for %s (task returned to ready)" % tid)
     window = probes.ccusage_window()
     pct = reportmod._window_pct(window)
     shiftmod.start_shift(state, window_pct=pct)

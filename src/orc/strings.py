@@ -52,6 +52,18 @@ START_CANARY_FAIL = "canary: FAILED ({n} check(s)); shift not started"
 START_NO_READY = "no ready tasks in the queue; nothing to start"
 START_SPAWNED = "spawned worker for {id} in {project} (pid {pid})"
 
+# --- dispatcher: preflight / re-validate / reconcile (en) ---
+PARK_DIRTY_TREE = (
+    "parked: project git tree is dirty and not ours "
+    "(a human may be mid-edit): {paths}. Not spawning a worker on top of it."
+)
+PARK_PROJECT_MISSING = "parked: project path missing: {project}"
+PARK_NOT_A_REPO = "parked: project is not a git repository: {project}"
+REVALIDATE_NOTE = (
+    "orc re-validate: the product layer (docs/) changed after this task's brief was "
+    "approved (rev {rev}); the plan may be stale — confirm scope before building."
+)
+
 # --- Canary check labels (en; operational preflight report) ---
 CANARY_HEADER = "=== canary preflight ==="
 CANARY_LINE_OK = "[ ok ] {name}: {detail}"
