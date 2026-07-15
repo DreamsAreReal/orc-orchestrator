@@ -41,19 +41,28 @@ def run(cfg, hub, spawn_probe=True):
     detail = "loggedIn via %s" % claude_bin if ok else "claude auth not loggedIn / forced-fail"
     checks.append(("auth", ok, detail))
 
-    # 3. ccusage window gauge
+    # 3. ccusage window gauge — INFORMATIONAL, never a fail criterion (3rd instance of the
+    # window-vs-workability root error, after admission F5 and the newspaper F6). An
+    # inactive/None ccusage window does NOT mean the shift cannot run: between 5-hour blocks
+    # (block reset) the window is briefly inactive / remaining=0, yet claude simply opens a
+    # FRESH block and spends fresh quota. Failing the shift here self-blocked a perfectly
+    # workable shift and fired a FALSE "shift did not start" notification (user-caught). Real
+    # exhaustion surfaces reactively via a CLI limit-string in admission, not via the window
+    # gauge. So we report the window status but keep ok=True (a warn), never failing.
     w = probes.ccusage_window()
-    ok = (w is not None and w.get("active")) and not _forced_fail("ccusage")
-    if ok:
+    if w is not None and w.get("active"):
         detail = "window active, %s min remaining" % w.get("remaining_minutes")
     else:
-        detail = "ccusage window unavailable/inactive / forced-fail"
-    checks.append(("ccusage", ok, detail))
+        detail = "window resetting/inactive -- quota is fresh; real limits caught by admission"
+    checks.append(("ccusage", True, detail, "warn"))
 
-    # 4. notification channel
-    ok = probes.notifier_available() and not _forced_fail("notify")
-    detail = "osascript available" if ok else "osascript missing / forced-fail"
-    checks.append(("notify", ok, detail))
+    # 4. notification channel — INFORMATIONAL, never a fail criterion. A missing notifier
+    # means the operator gets no push notifications, NOT that the shift cannot work. Failing
+    # here would refuse a workable shift over a cosmetic channel. Report it as a warn.
+    if probes.notifier_available():
+        checks.append(("notify", True, "osascript available"))
+    else:
+        checks.append(("notify", True, "notifier unavailable -- shift runs, no push notifications", "warn"))
 
     # 5. free RAM above admission threshold
     ram = probes.free_ram_mb()

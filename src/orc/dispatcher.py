@@ -160,9 +160,19 @@ def poll_completions(state, hub, cfg=None):
         if status == "done":
             # B1: a DONE claim is honored ONLY with an external fact (fresh commit /
             # changed artifact since the worker started). Otherwise it is a suspected
-            # fake-done: do NOT close the bd task, do NOT record it done -- park it,
-            # keep the worker window, and surface it in the newspaper for inspection.
+            # fake-done. BUT a STILL-ALIVE worker that just wrote DONE may not have flushed
+            # its deliverable to disk yet (proven live in the G1 pipeline run: the poll
+            # fired ~4s before the worker wrote factorial.py, causing a FALSE fake-done
+            # park of a real, working deliverable). So: only PARK as suspected-fake-done a
+            # worker that is DEAD (exited having produced no external fact -- the true
+            # reward-hack). A live worker with no external fact yet is simply NOT-YET-DONE:
+            # leave it in `workers` and re-poll next tick. This keeps the anti-reward-hack
+            # wall intact (a dead worker that produced nothing is still parked) without
+            # racing a worker mid-write.
             if not worker_progressed(w):
+                if _pid_alive(w.get("pid")):
+                    # Still working; the DONE is premature/unflushed. Do not finalize.
+                    continue
                 _safe_block(hub, task_id)
                 shiftmod.mark_parked(state, task_id, S.PARK_SUSPECTED_FAKE_DONE)
                 transitions.append((task_id, "suspected-fake-done"))
@@ -565,9 +575,13 @@ def start_prompt(project, slug, text):
         override = os.environ.get("ORC_PROMPT_OVERRIDE")
         return override if override else text
     return (
-        "Resume/start pipeline task. Workspace: docs/tasks/%s/. Product layer: docs/. "
-        "Task: %s. Read docs/tasks/%s/STATE.md if it exists (resume), else phase 0."
-        % (slug, text, slug)
+        "Run this task THROUGH THE PIPELINE: invoke the `pipeline` skill (Skill tool) "
+        "before doing any work -- do NOT do it raw. Two-layer workspace: your task lives "
+        "under docs/tasks/%s/ (its own STATE.md), the product layer is docs/. If "
+        "docs/tasks/%s/STATE.md already exists, RESUME the pipeline from it; otherwise "
+        "start at phase 0 (the pipeline will offer a folded micro/lite mode at the gate "
+        "for a tiny deliverable). Task: %s"
+        % (slug, slug, text)
     )
 
 

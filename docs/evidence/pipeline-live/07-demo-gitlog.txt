@@ -1,0 +1,2 @@
+f3ea38e Add is_palindrome with pytest tests
+1f042ab init demo project

@@ -1,0 +1,8 @@
+=== RUN 2 (with B1 race fix) — G1 CLOSED ===
+task: orc-pipeline-demo-hub-c1q  ->  DONE (spent 2.66M tokens)
+worker cmd (from ps): sandbox+env-wall prefix -> /opt/homebrew/bin/claude "$(cat .orc/prompt...)"
+prompt invoked the pipeline SKILL (no ORC_RAW_PROMPT, no ORC_SPAWN_CMD_OVERRIDE, no seam)
+pipeline phases (STATE.md): 0 intake -> gate TZ APPROVED (micro) -> BUILD -> VERIFY -> DONE
+external facts: git commit f3ea38e + palindrome.py/test_palindrome.py (pytest 5 passed)
+loop closed: daemon poll detected DONE + external fact -> bd close -> newspaper 'готово'
+window closed: worker exited, shift.json workers=[]  done=[c1q]

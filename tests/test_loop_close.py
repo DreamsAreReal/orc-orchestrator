@@ -135,6 +135,9 @@ def test_poll_done_without_external_fact_is_parked(tmp_path, monkeypatch):
                         lambda hub, tid, st: blocked.append((tid, st)) or True)
     monkeypatch.setattr(dispatcher.spawn, "close_worker",
                         lambda cfg, wid, session=None: closed_win.append(wid) or True)
+    # A true fake-done is a worker that has EXITED having produced nothing (a still-alive
+    # worker may just be mid-write -- see test_poll_done_live_worker_no_fact_not_parked).
+    monkeypatch.setattr(dispatcher, "_pid_alive", lambda pid: False)
 
     state = _register(proj, "slug1", "t-1", "5000")
     state, tr = dispatcher.poll_completions(state, "hub")
@@ -163,6 +166,8 @@ def test_poll_done_parks_trivial_bypasses(tmp_path, monkeypatch, trick):
     monkeypatch.setattr(dispatcher.beads, "close", lambda hub, tid: pytest.fail("closed a fake"))
     monkeypatch.setattr(dispatcher.beads, "set_status", lambda hub, tid, st: True)
     monkeypatch.setattr(dispatcher.spawn, "close_worker", lambda cfg, wid, session=None: True)
+    # trivial-bypass fake-done is judged only after the worker has exited (dead PID).
+    monkeypatch.setattr(dispatcher, "_pid_alive", lambda pid: False)
 
     state = _register(proj, "slug1", "t-1", "5000")
     _t.sleep(1.1)   # the worker's started_epoch is now < the trick's timestamp
@@ -175,6 +180,43 @@ def test_poll_done_parks_trivial_bypasses(tmp_path, monkeypatch, trick):
     state, tr = dispatcher.poll_completions(state, "hub")
     assert tr == [("t-1", "suspected-fake-done")]
     assert [p["task"] for p in state.get("parked", [])] == ["t-1"]
+
+
+def test_poll_done_live_worker_no_fact_not_parked_then_closes(tmp_path, monkeypatch):
+    """B1 race fix (found LIVE in the G1 pipeline run): a worker wrote STATE.md=DONE ~4s
+    BEFORE it flushed its real deliverable to disk. The poll fired in that gap and the old
+    code parked a real, working deliverable as 'suspected fake-done' -- permanently, since a
+    parked task is dropped from `workers` and never re-polled. The fix: a STILL-ALIVE worker
+    with no external fact yet is NOT-YET-DONE (left in `workers`, re-polled next tick), NOT a
+    fake-done. Only a DEAD worker that produced nothing is the true reward-hack. This does
+    NOT weaken the wall: the deliverable is still required before the task closes."""
+    proj = str(tmp_path)
+    _write_state(proj, "slug1", DONE_REAL)   # DONE claimed, but no deliverable on disk yet
+    monkeypatch.setattr(dispatcher, "_worker_slug", lambda hub, tid, p: "slug1")
+    monkeypatch.setattr(dispatcher.beads, "close",
+                        lambda hub, tid: pytest.fail("closed without an external fact"))
+    monkeypatch.setattr(dispatcher.beads, "set_status",
+                        lambda hub, tid, st: pytest.fail("parked a still-live worker"))
+    monkeypatch.setattr(dispatcher.spawn, "close_worker", lambda cfg, wid, session=None: True)
+    # tick 1: the worker is ALIVE and has produced no external fact yet.
+    monkeypatch.setattr(dispatcher, "_pid_alive", lambda pid: True)
+
+    state = _register(proj, "slug1", "t-1", "5000")
+    state, tr = dispatcher.poll_completions(state, "hub")
+    assert tr == []                                   # no transition: not-yet-done
+    assert [w["task"] for w in state["workers"]] == ["t-1"]   # still active, will re-poll
+    assert state.get("parked", []) == []              # NOT parked as fake
+
+    # tick 2: the worker has now flushed the real deliverable -> the loop closes normally.
+    closed_bd = []
+    monkeypatch.setattr(dispatcher.beads, "close",
+                        lambda hub, tid: closed_bd.append(tid) or True)
+    monkeypatch.setattr(dispatcher.beads, "set_status", lambda hub, tid, st: True)
+    _real_deliverable(proj)
+    state, tr = dispatcher.poll_completions(state, "hub")
+    assert tr == [("t-1", "done")]
+    assert closed_bd == ["t-1"]
+    assert [d["task"] for d in state["done"]] == ["t-1"]
 
 
 def test_poll_gate_parks_and_keeps_window(tmp_path, monkeypatch):

@@ -102,7 +102,10 @@ def test_project_mutex():
 def test_start_prompt_raw_vs_pipeline(monkeypatch):
     monkeypatch.delenv("ORC_RAW_PROMPT", raising=False)
     p = dispatcher.start_prompt("/proj", "slug", "do the thing")
-    assert "pipeline" in p and "docs/tasks/slug/" in p
+    # Non-raw prompt drives the worker THROUGH the conveyor: it must explicitly invoke
+    # the `pipeline` skill (the North Star requirement), not just mention the word.
+    assert "pipeline` skill" in p and "docs/tasks/slug/" in p
+    assert "do the thing" in p
     monkeypatch.setenv("ORC_RAW_PROMPT", "1")
     assert dispatcher.start_prompt("/proj", "slug", "do the thing") == "do the thing"
 
@@ -205,6 +208,65 @@ def test_canary_all_ok(isolated_home, monkeypatch):
     assert all(c[1] for c in checks)
 
 
+def test_canary_inactive_window_still_starts_shift(isolated_home, monkeypatch):
+    """3rd instance of the window-vs-workability root error (after admission F5, newspaper
+    F6): an INACTIVE/None ccusage window (a 5-hour block reset) must NOT fail the shift. The
+    block simply reopens fresh; real exhaustion is caught reactively by admission. The user
+    got a FALSE 'shift did not start' notification because canary failed on the window gauge.
+    Here: bd/auth/ram ok + inactive window -> canary PASSES (shift starts), ccusage is a warn."""
+    monkeypatch.delenv("ORC_CANARY_FAIL", raising=False)
+    monkeypatch.setattr(canary.probes, "claude_auth_ok", lambda b: True)
+    monkeypatch.setattr(canary.probes, "notifier_available", lambda: True)
+    monkeypatch.setattr(canary.probes, "free_ram_mb", lambda: 1000)
+    monkeypatch.setattr(canary.beads, "bd_available", lambda: True)
+    monkeypatch.setattr(canary.beads, "ready", lambda hub: [])
+    cfg = config.load()
+    for window in ({"active": False, "remaining_minutes": 0}, None):
+        monkeypatch.setattr(canary.probes, "ccusage_window", lambda w=window: w)
+        checks, ok = canary.run(cfg, isolated_home, spawn_probe=False)
+        assert ok is True                                       # shift STARTS despite window
+        cc = [c for c in checks if c[0] == "ccusage"][0]
+        assert cc[1] is True and cc[3] == "warn"                # ccusage informational, ok
+        assert "quota is fresh" in cc[2] or "resetting" in cc[2]
+
+
+def test_canary_missing_notifier_still_starts_shift(isolated_home, monkeypatch):
+    """A missing notifier means no push notifications, NOT an unworkable shift. bd/auth/ram
+    ok + no notifier -> canary PASSES (informational warn), shift starts."""
+    monkeypatch.delenv("ORC_CANARY_FAIL", raising=False)
+    monkeypatch.setattr(canary.probes, "claude_auth_ok", lambda b: True)
+    monkeypatch.setattr(canary.probes, "ccusage_window",
+                        lambda: {"active": True, "remaining_minutes": 100})
+    monkeypatch.setattr(canary.probes, "notifier_available", lambda: False)
+    monkeypatch.setattr(canary.probes, "free_ram_mb", lambda: 1000)
+    monkeypatch.setattr(canary.beads, "bd_available", lambda: True)
+    monkeypatch.setattr(canary.beads, "ready", lambda hub: [])
+    cfg = config.load()
+    checks, ok = canary.run(cfg, isolated_home, spawn_probe=False)
+    assert ok is True
+    nt = [c for c in checks if c[0] == "notify"][0]
+    assert nt[1] is True and len(nt) > 3 and nt[3] == "warn"
+
+
+def test_canary_real_blocker_still_fails(isolated_home, monkeypatch):
+    """The hard fail criteria (bd / auth / ram) still refuse the shift. Only the window and
+    notifier were demoted to informational -- a genuine blocker must still stop the shift."""
+    monkeypatch.delenv("ORC_CANARY_FAIL", raising=False)
+    monkeypatch.setattr(canary.probes, "claude_auth_ok", lambda b: True)
+    monkeypatch.setattr(canary.probes, "ccusage_window",
+                        lambda: {"active": True, "remaining_minutes": 100})
+    monkeypatch.setattr(canary.probes, "notifier_available", lambda: True)
+    monkeypatch.setattr(canary.probes, "free_ram_mb", lambda: 10)   # below any sane threshold
+    monkeypatch.setattr(canary.beads, "bd_available", lambda: True)
+    monkeypatch.setattr(canary.beads, "ready", lambda hub: [])
+    cfg = config.load()
+    cfg["min_free_ram_mb"] = 500
+    checks, ok = canary.run(cfg, isolated_home, spawn_probe=False)
+    assert ok is False                                          # real RAM blocker refuses
+    ram = [c for c in checks if c[0] == "ram"][0]
+    assert ram[1] is False
+
+
 def test_canary_warns_loud_when_sandbox_disabled(isolated_home, monkeypatch):
     """B2 loud opt-out: allow_no_sandbox=true appends a [WARN] to the canary (does NOT fail
     the shift, but the operator is always told the exfiltration wall is off)."""
@@ -221,7 +283,8 @@ def test_canary_warns_loud_when_sandbox_disabled(isolated_home, monkeypatch):
     checks, ok = canary.run(cfg, isolated_home, spawn_probe=False)
     assert ok is True                                   # opt-out does not fail the shift
     warn = [c for c in checks if len(c) > 3 and c[3] == "warn"]
-    assert len(warn) == 1 and warn[0][0] == "sandbox"
+    # the sandbox opt-out warn is present (ccusage is also a warn now -- informational).
+    assert any(c[0] == "sandbox" for c in warn)
     report = canary.format_report(checks)
     assert "[WARN]" in report
     assert "~/.ssh" in report and "NOT blocked" in report
