@@ -15,7 +15,7 @@ autonomously on macOS. Read this first, then [ARCHITECTURE.md](ARCHITECTURE.md).
 ```bash
 python3 -m pytest tests/ -q     # 281 tests, python3-stdlib only, no external deps
 ```
-Deterministic end-to-end checks live in `.verify/*.sh` (security walls, loop-close, gate,
+The test suite covers security walls, loop-close, gate, and scale end-to-end
 scale-shift). They use the `ORC_SPAWN_CMD_OVERRIDE` seam to avoid spending live Claude
 quota — the real spawn/kill/window path is exercised, only the in-terminal program is stubbed.
 

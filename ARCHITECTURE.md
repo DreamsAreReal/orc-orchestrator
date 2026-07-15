@@ -85,7 +85,7 @@ worker's shell exits) is solved by setting the Terminal profile's `shellExitActi
 The dispatcher is state + process management + JSON parsing + testable logic → python
 stdlib (json/subprocess/signal/argparse), zero external deps. `tomllib` is absent in the
 system python 3.9.6, so config is JSON, not TOML. bash is used only for thin wrappers
-(osascript spawn, LaunchAgent runner, .verify E2E scripts).
+(osascript spawn, LaunchAgent runner).
 
 ## Code map (`src/orc/`)
 

@@ -150,7 +150,5 @@ the network is open, so treat sensitive projects with caution and keep the sandb
 
 ## Verification
 
-- `python3 -m pytest tests/` — unit tests (config, admission, watchdog, recovery, …).
-- `bash .verify/launchagent.sh` — LaunchAgent auth=0, kill switch, config-driven calibration.
-- `bash .verify/sandbox-walls.sh` — OS-sandbox blocks obfuscated escapes (F13).
-- `bash .verify/e2e-loop-close.sh` — the full add → shift → newspaper loop closes.
+- `python3 -m pytest tests/` — 281 unit tests (config, admission, watchdog, recovery,
+  sandbox walls, loop-close, gate, scale — all deterministic, no live Claude quota burned).
