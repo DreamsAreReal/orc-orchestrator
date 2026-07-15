@@ -34,3 +34,47 @@ GEN_MERGED = "Merged deny-walls into existing settings: {path}"
 GEN_CREATED = "Created worker settings with deny-walls: {path}"
 GEN_ENV_STRIPPED = "Stripped {n} secret env var(s) from worker environment."
 GEN_MCP_ALLOWLIST = "MCP allowlist applied: {servers}"
+
+# --- orc CLI operational messages (en; read by the operator at the terminal) ---
+ADD_CREATED = "added task {id} -> {project}"
+ADD_BATCH_DONE = "added {n} task(s) to ready"
+ERR_NO_TASK_TEXT = "error: task text is required"
+ERR_PROJECT_MISSING = "error: project path does not exist: {project}"
+ERR_HUB_MISSING = (
+    "error: orc hub is not initialized. Run `orc init` first (creates .beads queue)."
+)
+ERR_BD_MISSING = "error: `bd` (beads) not found on PATH; install with `brew install beads`."
+HUB_INITIALIZED = "orc hub initialized at {hub} (beads queue ready)"
+HUB_ALREADY = "orc hub already initialized at {hub}"
+
+START_CANARY_OK = "canary: all preflight checks passed; shift starting"
+START_CANARY_FAIL = "canary: FAILED ({n} check(s)); shift not started"
+START_NO_READY = "no ready tasks in the queue; nothing to start"
+START_SPAWNED = "spawned worker for {id} in {project} (pid {pid})"
+
+# --- Canary check labels (en; operational preflight report) ---
+CANARY_HEADER = "=== canary preflight ==="
+CANARY_LINE_OK = "[ ok ] {name}: {detail}"
+CANARY_LINE_FAIL = "[FAIL] {name}: {detail}"
+
+# --- RU: shift report ("газета") + gate cards — user-facing digest (ru) ---
+RU_REPORT_TITLE = "СМЕНА orc"
+RU_REPORT_SUMMARY = "смена: {done} готово, {waiting} ждут тебя, {failed} упало; съедено {pct}% окна"
+RU_REPORT_NO_SHIFT = "смена не запущена. Поставь задачи (`orc add`) и запусти (`orc start`)."
+RU_REPORT_EMPTY = "смена пуста: задач в очереди нет."
+RU_ROW_RUNNING = "  ▸ {id}  {phase:<10} {status:<8} {mins}м  {tokens}"
+RU_ROW_WAITING = "  ⏸ {id}  ждёт тебя: {reason}"
+RU_ROW_DONE = "  ✓ {id}  готово"
+RU_ROW_FAILED = "  ✗ {id}  упало: {reason}"
+RU_POOL_LINE = "  пул: {pct}% окна, {mins_left} мин осталось, RAM {ram}"
+RU_SECTION_GATES = "── ждут твоего решения ──"
+RU_SECTION_RUNNING = "── в работе ──"
+RU_SECTION_DONE = "── завершено ──"
+RU_GATE_CARD = (
+    "  ⏸ {id} — {title}\n"
+    "     скоуп:      {scope}\n"
+    "     планка:     {bar}\n"
+    "     полномочия: {authority}\n"
+    "     цена ошибки: {cost}\n"
+    "     ТЗ: {brief_path}"
+)

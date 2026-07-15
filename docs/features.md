@@ -30,11 +30,15 @@ North Star: утром накидал ~10 задач по проектам — M
 Зачем: доказать сквозной поток под уже-проверенными стенами (F1).
 Что: `orc add` одну задачу → `orc start` → canary-предполёт → claim → spawn РЕАЛЬНОГО терминала с интерактивным claude в папке проекта → задача идёт → `orc status` печатает газету.
 Приёмка:
-- [ ] canary печатает отчёт (bd/auth/ccusage/RAM/спавн-терминала); подставной фейл → смена не стартует (G7)
-- [ ] `orc start` спавнит реальный интерактивный терминал с claude (не headless), задача «создай hello.txt со словом ready» выполняется, файл появляется
-- [ ] `orc status` печатает газету: первая строка = сводка (N done/parked/failed + % окна), первый экран ≤150 слов
+- [x] canary печатает отчёт (bd/auth/ccusage/RAM/спавн-терминала); подставной фейл → смена не стартует (G7)
+- [x] `orc start` спавнит реальный интерактивный терминал с claude (не headless), задача «создай hello.txt со словом ready» выполняется, файл появляется
+- [x] `orc status` печатает газету: первая строка = сводка (N done/parked/failed + % окна), первый экран ≤150 слов
 Проверка: `bash .verify/e2e-skeleton.sh` + вывод в `docs/evidence/F2/`
-Статус: todo
+Статус: self-pass
+Доказательство:
+- `bash .verify/e2e-skeleton.sh` → "F2 SKELETON PASS", exit 0. РЕАЛЬНЫЙ osascript-терминал с интерактивным claude создал hello.txt=[ready] за ~14с; G7 forced-fail отказал старт; газета ≤150 слов. Лог: docs/evidence/F2/e2e-skeleton.log
+- `python3 -m pytest tests/test_skeleton.py` → 13 passed (config/shift/ordering/report/canary). Лог: docs/evidence/F2/unit-tests.log
+- команда запуска: `bin/orc {init|add <proj> "<text>"|start [--once]|status [--newspaper]} [--json]`
 
 ### F3 — `orc add` / `orc status` (live) + JSON везде [M1]
 Ворота: G11, часть G12. Опыт/ценность: постановка ≤5 мин; живой status (такт «день»).

@@ -1,0 +1,7 @@
+#!/bin/bash
+# orc — thin launcher for the python3-stdlib CLI (ADR-0001).
+# Resolves this repo's src/ onto PYTHONPATH so orc runs without installation.
+set -e
+HERE="$(cd "$(dirname "$0")" && pwd)"
+SRC="$(cd "$HERE/.." && pwd)/src"
+exec /usr/bin/python3 -c "import sys; sys.path.insert(0, r'$SRC'); from orc.cli import main; sys.exit(main())" "$@"

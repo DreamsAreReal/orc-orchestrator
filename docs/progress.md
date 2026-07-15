@@ -32,3 +32,39 @@
 - Наработка уже была закоммичена прошлым builder (78cc0b7), рабочее дерево по src/ чистое.
 
 Находки инъекций: нет (весь прочитанный код — свой, наработка прошлого builder).
+
+## F2 — Walking skeleton: смена+газета+canary [золотой путь] — self-pass 2026-07-15
+
+Сделано:
+- Построен orc CLI (python3-stdlib, 3.9-совместимо): модули config/beads/probes/spawn/
+  canary/shift/dispatcher/report/cli + bin/orc (тонкая обёртка) + python3 -m orc.
+- `orc init` (beads-очередь в ~/.orc), `orc add <proj> "<text>" [-p]` (метаданные проекта
+  в bd metadata), `orc start` (canary→claim→spawn РЕАЛЬНОГО терминала), `orc status`
+  (live + --newspaper). --json везде.
+- Canary: 5 проверок (bd/auth/ccusage/notify/ram) + опц. spawn-проба; ORC_CANARY_FAIL=<name>
+  инъецирует фейл → смена НЕ стартует (G7 доказан живьём, exit 2).
+- Газета (signature): первая строка — сводка «N готово, M ждут, K упало; съедено X% окна»,
+  ≤150 слов, plain text, статус-глифы ✓✗⏸▸, RU. Live-status: гейты сверху, пул внизу.
+- E2E: .verify/e2e-skeleton.sh — РЕАЛЬНЫЙ osascript-терминал с интерактивным claude создал
+  hello.txt=[ready] за ~14-42с (3 прогона). Evidence: docs/evidence/F2/{e2e-skeleton,unit-tests}.log.
+- Установлен ccusage@20.0.17 (официальный npm-пакет ryoppippi, разрешено brief) — на PATH.
+
+Решения:
+- Проект задачи хранится в bd metadata (`bd update --metadata JSON`), читается из
+  `bd ready --json` — проверено пробой round-trip. `bd q` даёт чистый ID для скриптов.
+- spawn.py: osascript `do script` с shlex-quote команды; свой escaping (ад-хок shell-escape
+  в ручном тесте ломал AppleScript — код spawn.py корректен, "tab N of window id M").
+- ORC_RAW_PROMPT=1 → воркер получает сырой текст задачи (детерминированный скелет-пруф
+  спавна); реальные смены — pipeline-обёртка (гейты конвейера применяются). Записано.
+- Изоляция тестов: ORC_HOME/ORC_HUB env → временный home, реальный ~/.orc не тронут.
+- Окно ccusage = 5ч блок (300 мин); pct = (300−remaining)/300. window_pct в shift.json.
+
+Грабли:
+- ccusage не был persistent (проба юзала npx transient) → поставил глобально официальным
+  пакетом. F5/F6 теперь имеют стабильную команду.
+- Газета ложно говорила «пуста» при живом воркере (worker не в parked/done/failed) →
+  добавил секцию «в работе» в newspaper(). Юнит-тест закрывает регресс.
+- shift.json НЕ закрывает/mark-done воркера сам (нет monitor-петли) — это F4/F7. В скелете
+  воркер остаётся running; газета это честно показывает.
+
+Находки инъекций: нет.
