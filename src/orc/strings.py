@@ -201,6 +201,10 @@ RU_GATE_CARD_DEGRADED = (
 )
 RU_SECTION_RUNNING = "── в работе ──"
 RU_SECTION_DONE = "── завершено ──"
+# Failed tasks get their OWN header, not tucked silently under "завершено" (done): a
+# task that FELL is not a task that finished, and the operator must not skim past it
+# (consumer-1). Kept visually distinct from the done section.
+RU_SECTION_FAILED = "── упало (разберись) ──"
 RU_GATE_CARD = (
     "  ⏸ {id} — {title}\n"
     "     скоуп:      {scope}\n"

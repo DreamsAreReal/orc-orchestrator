@@ -227,7 +227,10 @@ def newspaper(state, hub, window=None):
             lines.append(_done_row(d, window_total=window_total))
         lines.append("")
 
+    # Failed tasks get their OWN section header (consumer-1): a fallen task must not read
+    # as "done". Rendered after the done section, clearly separated.
     if failed:
+        lines.append(S.RU_SECTION_FAILED)
         for fl in failed:
             lines.append(S.RU_ROW_FAILED.format(id=fl.get("task"), reason=fl.get("reason", "")))
 

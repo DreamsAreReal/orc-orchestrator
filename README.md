@@ -77,6 +77,53 @@ frees its RAM) always happens; the profile fix removes the leftover empty window
 any survivor (bounded, typically well under 10s). Each stopped task is returned to `ready`
 in bd so the next shift re-serves it — nothing is lost.
 
+## Threat model — what is walled, what is not
+
+orc runs REAL Claude Code workers **unattended**, under `--dangerously-skip-permissions`
+(bypass), with the permissions of your user account. Be honest with yourself about what
+that means before you point it at a project. This section says plainly what the walls
+stop and what they do **not**.
+
+**Closed at the kernel / check level (enforced, proven by tests):**
+
+- **Destructive writes and any write outside the workspace** — blocked at the syscall
+  level by the OS-sandbox (seatbelt). Obfuscated escapes (`base64 | bash`, `python
+  shutil.rmtree`, `find -delete`) are stopped too, because the wall is on the write
+  syscall, not on a command pattern.
+- **Deleting files outside the workspace** — same seatbelt wall.
+- **Stealing `~/.ssh`** — seatbelt denies `file-read*` on `~/.ssh` (private keys are
+  unreadable even by an obfuscated reader).
+- **Secret env vars** — `unset` on spawn (denylist), so `ANTHROPIC_API_KEY`, `AWS_*`,
+  `GITHUB_TOKEN`, `*_SECRET`, … do not reach the worker. Claude's own OAuth (Keychain)
+  is untouched.
+- **Reward-hacking a "DONE"** — a task is closed ONLY on a real external fact (a non-empty
+  commit or a changed/created deliverable since the worker started), never on the worker's
+  self-report. Fake-done is parked, not trusted.
+- **`git push`** — blocked over both HTTPS and SSH: the worker's env is stripped of push
+  credentials (`GIT_ASKPASS=/usr/bin/false`, `credential.helper=''`, `GIT_SSH_COMMAND`/
+  `SSH_AUTH_SOCK` neutralized), so any git process in the worker tree fails on auth. The
+  operator pushes; the worker prepares and reports.
+- **MCP servers** — the worker's allowlist is empty by default; nothing is enabled unless
+  you add it to `config.json`.
+
+**Still open (be honest):**
+
+- **A worker CAN READ files outside the project.** The seatbelt confines *writes*, not
+  reads (except `~/.ssh`). A worker can read any file your user can read.
+- **The network is open.** Workers need it to reach the Claude API and fetch from git, so
+  outbound network is allowed. Combined with the read gap above, this means **theoretical
+  exfiltration of your project's (or your machine's) file contents is possible** — an
+  agent under bypass could read a file and send it somewhere.
+- **The sandbox is mandatory.** It is the primary wall. `allow_no_sandbox=true` removes it
+  (no write wall, no `~/.ssh` read wall) — a loud `[WARN]` in the canary and a banner in
+  the newspaper fire on every shift start when it is set. Do not run unattended with the
+  sandbox off.
+
+**Bottom line:** run tasks and projects **you trust**. The strong walls (write, delete,
+`~/.ssh` read, push, secret env, reward-hack) are real and hold under obfuscation. But an
+autonomous agent with read access and a network is a real exfiltration surface — treat
+sensitive projects with caution, and keep the sandbox on.
+
 ## Verification
 
 - `python3 -m pytest tests/` — unit tests (config, admission, watchdog, recovery, …).

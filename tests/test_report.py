@@ -100,6 +100,27 @@ def test_pool_footer_labels_reset_timer_honestly(monkeypatch):
     assert "% окна" not in footer
 
 
+# --------------------------------------------------------------------------- #
+# failed tasks get their own header, not silently under "done" (consumer-1)
+# --------------------------------------------------------------------------- #
+def test_newspaper_failed_tasks_have_own_header(monkeypatch):
+    monkeypatch.setattr(report.probes, "ccusage_window",
+                        lambda: {"active": False, "total_tokens": None})
+    monkeypatch.setattr(report.probes, "total_tokens_now", lambda: None)
+    monkeypatch.setattr(report.probes, "total_cost_now", lambda: None)
+    st = shiftmod._empty()
+    shiftmod.mark_done(st, "t1")
+    shiftmod.mark_failed(st, "t9", "budget cap exceeded")
+    out = report.newspaper(st, "hub")
+    # A distinct failed header exists and is NOT the done header.
+    assert report.S.RU_SECTION_FAILED in out
+    assert report.S.RU_SECTION_FAILED != report.S.RU_SECTION_DONE
+    # The failed section comes AFTER the done section (fallen tasks are called out below).
+    assert out.index(report.S.RU_SECTION_DONE) < out.index(report.S.RU_SECTION_FAILED)
+    # The failed row lives under the failed header, not under "done".
+    assert out.index("t9") > out.index(report.S.RU_SECTION_FAILED)
+
+
 def test_summary_omits_spend_clause_when_ccusage_down(monkeypatch):
     monkeypatch.setattr(report.probes, "ccusage_window", lambda: None)
     monkeypatch.setattr(report.probes, "total_tokens_now", lambda: None)
