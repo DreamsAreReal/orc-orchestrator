@@ -53,7 +53,10 @@ def build_inner_command(project, claude_bin, prompt, session, cfg=None):
     without a real claude. F13: wrapped under the OS-sandbox (seatbelt) when enabled, same
     as the Terminal backend.
     """
-    export = "export ORC_SESSION=%s; " % shlex.quote(str(session))
+    from . import worker_walls as _ww
+    # G0c: same git-push credential strip as the Terminal backend (defense-in-depth).
+    export = _ww.push_neutralizing_export_prefix()
+    export += "export ORC_SESSION=%s; " % shlex.quote(str(session))
     override = os.environ.get("ORC_SPAWN_CMD_OVERRIDE")
     if override:
         inner = "%scd %s && %s" % (export, shlex.quote(project), override)

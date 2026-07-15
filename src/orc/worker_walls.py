@@ -313,6 +313,43 @@ def stripped_env(base_env=None, denylist=None):
     return env, removed
 
 
+# Git-push capability removal (G0c). The F1 PreToolUse hook blocks the literal
+# `git push` token but is bypassed by obfuscation (base64|bash), and the F13 seatbelt
+# sandbox only confines FILE WRITES (network stays on so the worker can reach the claude
+# API / git fetch / brew). So an obfuscated `git push` would otherwise authenticate via
+# the macOS Keychain (credential.helper=osxkeychain) and reach the remote. These env vars
+# remove the push CAPABILITY at its root: no credential can be supplied to any git process
+# in the worker's tree, so a push fails by auth regardless of how it is reached. Proven by
+# spike (docs/evidence/F13-push/): obfuscated push -> "could not read Username: terminal
+# prompts disabled", exit 128, nothing pushed.
+PUSH_NEUTRALIZING_GIT_ENV = {
+    "GIT_TERMINAL_PROMPT": "0",       # never prompt for a username/password interactively
+    "GIT_ASKPASS": "/usr/bin/false",  # any askpass call fails -> no password is ever supplied
+    "GIT_CONFIG_NOSYSTEM": "1",       # ignore /etc/gitconfig credential helpers
+    "GIT_CONFIG_COUNT": "1",          # inject one inline config pair (below):
+    "GIT_CONFIG_KEY_0": "credential.helper",
+    "GIT_CONFIG_VALUE_0": "",         # empty -> disables the osxkeychain helper for this tree
+}
+
+
+def push_neutralizing_git_env():
+    """Return a copy of PUSH_NEUTRALIZING_GIT_ENV (git-push credential capability removed)."""
+    return dict(PUSH_NEUTRALIZING_GIT_ENV)
+
+
+def push_neutralizing_export_prefix():
+    """Shell `export k=v; ...` prefix that strips git-push credentials for the worker tree.
+
+    Prepended to the worker's inner spawn command so every git subprocess the worker
+    launches inherits a credential-less environment. Values are shell-quoted.
+    """
+    import shlex as _shlex
+    return "".join(
+        "export %s=%s; " % (k, _shlex.quote(v))
+        for k, v in PUSH_NEUTRALIZING_GIT_ENV.items()
+    )
+
+
 def generate_worker_settings(workspace, mcp_allowlist=None, secret_denylist=None,
                              existing_settings=None):
     """Build the merged worker settings dict (deny-walls + MCP allowlist + ORC_WORKSPACE).

@@ -242,3 +242,52 @@ def test_hook_blocks_ssh_read(tmp_path):
     rc, err = _run_hook({"tool_name": "Bash", "tool_input": {"command": "cat ~/.ssh/id_rsa"}}, ws)
     assert rc == 2
     assert "ssh" in err.lower()
+
+
+# --------------------------------------------------------------------------- #
+# G0c: git-push capability removal from the worker environment
+# --------------------------------------------------------------------------- #
+def test_push_neutralizing_env_disables_credentials():
+    env = W.push_neutralizing_git_env()
+    # never prompt, askpass always fails, keychain helper disabled inline
+    assert env["GIT_TERMINAL_PROMPT"] == "0"
+    assert env["GIT_ASKPASS"] == "/usr/bin/false"
+    assert env["GIT_CONFIG_KEY_0"] == "credential.helper"
+    assert env["GIT_CONFIG_VALUE_0"] == ""  # empty -> osxkeychain off
+    # returns a copy (mutating the result must not corrupt the module constant)
+    env["GIT_TERMINAL_PROMPT"] = "1"
+    assert W.push_neutralizing_git_env()["GIT_TERMINAL_PROMPT"] == "0"
+
+
+def test_push_neutralizing_prefix_shell_shape():
+    pfx = W.push_neutralizing_export_prefix()
+    for k in ("GIT_TERMINAL_PROMPT", "GIT_ASKPASS", "GIT_CONFIG_NOSYSTEM",
+              "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"):
+        assert ("export %s=" % k) in pfx
+    # each assignment terminated so it can be prepended before `cd ... && ...`
+    assert pfx.strip().endswith(";")
+
+
+def test_start_command_carries_push_wall(tmp_path):
+    from orc import spawn
+    cmd = spawn.build_start_command(str(tmp_path), "/bin/claude", "do it",
+                                    session="s1", cfg={"sandbox": False})
+    assert "GIT_TERMINAL_PROMPT=0" in cmd
+    assert "GIT_ASKPASS=/usr/bin/false" in cmd
+    assert "credential.helper" in cmd
+    # push wall precedes the session export and the cd
+    assert cmd.index("GIT_TERMINAL_PROMPT") < cmd.index("ORC_SESSION")
+    assert cmd.index("ORC_SESSION") < cmd.index("cd ")
+
+
+def test_worker_env_git_config_disables_keychain(tmp_path):
+    # Run `git config credential.helper` under exactly the exported worker env and assert
+    # the osxkeychain helper is no longer in effect (empty value from the inline config).
+    from orc import spawn
+    cmd = spawn.build_start_command(str(tmp_path), "/bin/true", "x",
+                                    session="pw", cfg={"sandbox": False})
+    exports = cmd.split(" && ")[0]  # the export prefix, before cd
+    r = subprocess.run(["bash", "-c", exports + "; git config credential.helper"],
+                       capture_output=True, text=True)
+    # value is empty (helper disabled); no 'osxkeychain' leaks through
+    assert "osxkeychain" not in r.stdout.strip()

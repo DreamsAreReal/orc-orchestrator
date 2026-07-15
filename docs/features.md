@@ -24,6 +24,10 @@ North Star: утром накидал ~10 задач по проектам — M
 - `bash .verify/negative-walls.sh` → "ALL WALLS HELD (3/3). F1 gate PASS", exit 0 (LIVE claude 2.1.193, bypassPermissions). Лог: docs/evidence/F1/negative-walls.log
 - `python3 -m pytest tests/test_worker_walls.py` → 37 passed. Лог: docs/evidence/F1/unit-tests.log
 - merge/env/MCP живьём: docs/evidence/F1/merge-and-env-demo.log (user-hooks+customUserKey+model preserved, 4 secret vars stripped, MCP allowlist [] по умолчанию)
+- **ДОЛГ G0c ЗАКРЫТ (M4): git-push-возможность лишена в границах песочницы воркера.** Проблема (из eval M3): обфусцированный `git push` обходит F1-паттерн-хук (base64|bash), а F13-seatbelt конфайнит только ФС-запись (сеть вкл для claude API/git fetch) → воркер мог push-нуть через osxkeychain. Фикс: `worker_walls.push_neutralizing_export_prefix()` экспортит GIT_TERMINAL_PROMPT=0 / GIT_ASKPASS=/usr/bin/false / credential.helper='' (inline GIT_CONFIG) в inner-команду воркера (spawn.build_start_command + ghostty) → ни один git-процесс в дереве воркера не может получить креды. Доказательство:
+  - `bash .verify/push-wall.sh` → "F13-push PASS", exit 0. БАЗЛАЙН (норм. env): обфусц. push дошёл до АУТЕНТИФИЦИРОВАННОГО GitHub (keychain дал креды → "Repository not found" = стена нагружена). ВОРКЕР-env: тот же обфусц. push → "could not read Username: terminal prompts disabled", exit 128, sentinel НЕ ушёл. Лог: docs/evidence/F13-push/push-wall.log (+baseline.out/walled.out/push-spike.sh).
+  - НЕТ побочки: `claude auth status` loggedIn=true exit 0 под этим env (OAuth в Keychain — свой путь, не git creds); `git ls-remote` публичного репо exit 0 (read не требует кредов). Лишён ТОЛЬКО push.
+  - `python3 -m pytest tests/test_worker_walls.py` → 41 passed (+4: env-форма, prefix-shell-shape, start-command-carries-wall, keychain-disabled-under-worker-env).
 
 ### F2 — Walking skeleton: сквозная смена из 1 задачи + газета + canary [M1] [золотой путь]
 Ворота: G0b, часть G1, G7 (canary), signature. Опыт/ценность: весь такт «накидал→смена→газета» тонким срезом; signature (газета+canary) в скелете, не заглушкой.
@@ -153,11 +157,20 @@ North Star: утром накидал ~10 задач по проектам — M
 Ворота: G9. Опыт/ценность: двухслойная мультизадачность (продуктовый слой + мини-пайпы задач).
 Что: по RS-02 — pipeline-hooks.py (2 глобы STATE.md +tasks/*/docs), pipeline-scorecard.sh (детект workspace), SKILL.md/phase-0 (развилка «STATE есть, но задача новая»→подворкспейс). СТАРОЕ поведение не ломается; патч на отдельной git-ветке ~/.claude с возможностью `git revert`.
 Приёмка:
-- [ ] характеризационный набор: scorecard/doctor на существующем smoke-макете ДО патча зафиксирован; ПОСЛЕ — тот же результат (0 регрессий) (G9)
-- [ ] scorecard находит `docs/tasks/<слаг>/`, хуки видят STATE там, doctor exit 0
-- [ ] патч откатывается `git revert` одним коммитом, doctor снова зелёный (проверено)
+- [x] характеризационный набор: scorecard/doctor на существующем smoke-макете ДО патча зафиксирован; ПОСЛЕ — тот же результат (0 регрессий) (G9)
+- [x] scorecard находит `docs/tasks/<слаг>/`, хуки видят STATE там, doctor exit 0
+- [x] патч откатывается `git revert` одним коммитом, doctor снова зелёный (проверено)
 Проверка: `bash ~/.claude/skills/pipeline/bin/pipeline-lint.sh --doctor` + scorecard на обоих макетах + revert-тест (evidence/F11/)
-Статус: todo
+Статус: self-pass
+Доказательство:
+- РАСКЛАДКА (диск важнее RS-02): канон orc = `<project>/docs/tasks/<slug>/STATE.md` (dispatcher.task_state_path, design.md) — НЕ `tasks/*/docs` из RS-02. Патч построен под канон кода. 3 точки кода + 4 промптовые (минимальный дифф, рамка чужого кода).
+- Характеризация ДО/ПОСЛЕ на 2 smoke-макетах (proj-a стандартный `docs/`, proj-b tasks-раскладка), патч на git-ветке `orc-tasks-workspace-patch` в ~/.claude, коммит 7b57e2f:
+  - doctor: IDENTICAL до/после, exit 0 (0 регрессий системы). evidence/F11/{before,after}/doctor.txt
+  - scorecard STANDARD (proj-a): `diff before after` = IDENTICAL (0 регрессий старой раскладки). evidence/F11/{before,after}/scorecard-standard.txt
+  - scorecard TASKS (proj-b): PASS=4→8, находит `docs/tasks/add-widget/STATE.md` (STATE/Следующий шаг/Рекап/lint-state все PASS — идентично стандартной). evidence/F11/{before,after}/scorecard-tasks.txt
+  - хуки (pipeline-hooks.py posttooluse+stop, обе глобы стр.109/149): tasks-раскладка LIVE-detect 0→1 STATE.md; standard остался 1 (не сломался). evidence/F11/{before,after}/hooks-live-detect.txt
+- ОТКАТ (одним шагом): `git revert --no-edit HEAD` → патч исчез из hooks.py (0 совпадений `docs/tasks/*/STATE.md`), doctor exit 0. evidence/F11/revert-test.txt. Ветку вернул на 7b57e2f (патч жив для F12).
+- 200 orc-тестов зелёные после патча (патч в ~/.claude ортогонален orc-коду). Репро-скрипты: evidence/F11/{build-fixtures.sh,characterize.sh}.
 
 ### F12 — E2E-смена: 3 задачи / 2 проекта / 1 гейт [M4] — владелец центрального гейта G1
 Ворота: G1 (главная метрика цели). Опыт/ценность: доказать North Star целиком — Mac сам довёл смену до конца.

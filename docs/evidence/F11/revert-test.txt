@@ -1,0 +1,15 @@
+=== REVERT TEST (F11 acceptance: one-step rollback, doctor green) ===
+--- HEAD before revert ---
+7b57e2f pipeline: legalize docs/tasks/<slug>/ two-layer workspace (orc F11)
+
+--- git revert --no-edit HEAD (one step) ---
+[orc-tasks-workspace-patch f7ae21c] Revert "pipeline: legalize docs/tasks/<slug>/ two-layer workspace (orc F11)"
+ Date: Wed Jul 15 13:04:22 2026 +0400
+ 4 files changed, 9 insertions(+), 27 deletions(-)
+
+--- patch gone from hooks.py? (should be 0 matches) ---
+0
+0 (reverted)
+
+--- doctor after revert ---
+doctor_exit_after_revert=0

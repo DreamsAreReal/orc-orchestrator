@@ -12,6 +12,7 @@ import shlex
 import subprocess
 
 from . import sandbox as sandboxmod
+from . import worker_walls
 
 
 def _osascript(script):
@@ -98,12 +99,17 @@ def build_start_command(project, claude_bin, prompt, session=None, cfg=None):
     does not hinge on live-model latency or an exhausted usage window. Not used in real
     shifts (the dispatcher always passes a claude prompt).
     """
-    prefix = ""
+    # G0c: strip git-push credentials from the worker's environment so an obfuscated
+    # `git push` (which bypasses the F1 pattern-hook, and which the F13 file-write sandbox
+    # does not stop because network is on) fails by auth -- no credential can be supplied
+    # to any git process in the worker tree. Always applied (real shifts have no legitimate
+    # push; approved pushes go through the operator, not an unsupervised worker).
+    prefix = worker_walls.push_neutralizing_export_prefix()
     if session:
-        prefix = "export ORC_SESSION=%s; " % shlex.quote(str(session))
+        prefix += "export ORC_SESSION=%s; " % shlex.quote(str(session))
     override = os.environ.get("ORC_SPAWN_CMD_OVERRIDE")
     if override:
-        inner = "cd %s && %s%s" % (shlex.quote(project), prefix, override)
+        inner = "%scd %s && %s" % (prefix, shlex.quote(project), override)
     else:
         # cd into the project, then launch interactive claude with the start prompt.
         inner = "%scd %s && %s %s" % (
