@@ -33,7 +33,13 @@ def free_ram_mb():
 def ccusage_window():
     """Return the active window gauge dict or None.
 
-    {active, remaining_minutes, total_tokens} from `ccusage blocks --active --json`.
+    {active, remaining_minutes, total_tokens, cost_usd} from
+    `ccusage blocks --active --json`.
+
+    NB on the fields: `remaining_minutes` is the time until the 5-hour block RESETS (a
+    schedule timer), NOT a quota gauge -- do not present it as "spent". `total_tokens` /
+    `cost_usd` are the REAL cumulative spend in the active window; the newspaper's honest
+    shift-spend figure is the delta of these between shift start and now.
     """
     bin_ = shutil.which("ccusage")
     if not bin_:
@@ -54,13 +60,15 @@ def ccusage_window():
     blocks = data.get("blocks") or []
     active = [b for b in blocks if b.get("isActive")]
     if not active:
-        return {"active": False, "remaining_minutes": None, "total_tokens": None}
+        return {"active": False, "remaining_minutes": None,
+                "total_tokens": None, "cost_usd": None}
     b = active[0]
     proj = b.get("projection") or {}
     return {
         "active": True,
         "remaining_minutes": proj.get("remainingMinutes"),
         "total_tokens": b.get("totalTokens"),
+        "cost_usd": b.get("costUSD"),
     }
 
 
@@ -70,6 +78,17 @@ def total_tokens_now():
     if not w:
         return None
     return w.get("total_tokens")
+
+
+def total_cost_now():
+    """Best-effort cumulative cost (USD) in the active window. None if n/a.
+
+    Used as the newspaper's FALLBACK shift-spend figure when the token delta is unknown
+    (a "~$0.3 this shift" is still an honest resource figure the operator can watch)."""
+    w = ccusage_window()
+    if not w:
+        return None
+    return w.get("cost_usd")
 
 
 def claude_auth_ok(claude_bin):

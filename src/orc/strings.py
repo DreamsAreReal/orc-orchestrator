@@ -165,7 +165,16 @@ RU_NO_SANDBOX_WARN = (
     "  ! ВНИМАНИЕ: OS-песочница ОТКЛЮЧЕНА (allow_no_sandbox) — воркер БЕЗ главной стены:\n"
     "     чтение ~/.ssh и SSH/сетевая эксфильтрация НЕ заблокированы. Не для безнадзорных смен.")
 RU_REPORT_TITLE = "СМЕНА orc"
-RU_REPORT_SUMMARY = "смена: {done} готово, {waiting} ждут тебя, {failed} упало; съедено {pct}% окна"
+# Summary reports the REAL shift spend (token/cost delta), NOT the block-reset timer. The
+# old summary showed elapsed 5-hour-block time as if it were quota use -- misleading
+# (2026-07-15, user-caught). {spend} is a pre-rendered clause (RU_SPEND_SHIFT_*) or empty.
+# We show the ABSOLUTE spend, never an invented percent: ccusage does not know the Max x20
+# subscription cap, so a "% of quota" would be fabricated.
+RU_REPORT_SUMMARY = "смена: {done} готово, {waiting} ждут тебя, {failed} упало{spend}"
+# Pre-rendered shift-spend phrases (honest absolute figures, not a percent of an unknown cap).
+RU_SPEND_SHIFT_TOKENS = "потрачено ~{tokens} токенов за смену"
+RU_SPEND_SHIFT_COST = "потрачено ~${cost} за смену"
+RU_SPEND_UNKNOWN = "расход неизвестен (ccusage недоступен)"
 RU_REPORT_NO_SHIFT = "смена не запущена. Поставь задачи (`orc add`) и запусти (`orc start`)."
 RU_REPORT_EMPTY = "смена пуста: задач в очереди нет."
 RU_SECTION_QUEUED = "── в очереди (смена не запущена, `orc start`) ──"
@@ -179,7 +188,10 @@ RU_ROW_DONE_WAVE = "  ✓ {id}  готово (предложена волна){s
 RU_ROW_BETA = "  ◐ {id}  бета — ждёт твоего решения{spend}"
 RU_SPEND_SUFFIX = "  ~{spent} ток."
 RU_ROW_FAILED = "  ✗ {id}  упало: {reason}"
-RU_POOL_LINE = "  пул: {pct}% окна, {mins_left} мин осталось, RAM {ram}"
+# Pool footer: HONEST labels. Left = real shift spend (tokens/USD). Middle = minutes until
+# the LIMIT WINDOW RESETS -- a schedule timer, labelled as such (NOT "spent"; a low value
+# means fresh quota is imminent). Right = free RAM.
+RU_POOL_LINE = "  пул: {spend}; до сброса окна лимитов {mins_left} мин; RAM {ram}"
 RU_SECTION_GATES = "── ждут твоего решения ──"
 # Shown in place of a gate card's rich detail when bd is transiently unavailable: the
 # newspaper degrades (prints what it can) instead of crashing (P8).

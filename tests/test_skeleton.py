@@ -131,11 +131,15 @@ def test_task_meta_parses_dict_and_json_string():
 # report: newspaper first line + <=150 words + running-worker acknowledgement
 # --------------------------------------------------------------------------- #
 def test_newspaper_summary_first_and_word_cap(isolated_home, monkeypatch):
-    # deterministic window so pct is stable
+    # Deterministic window. total_tokens is the CURRENT cumulative window total; the shift
+    # baseline (tokens_at_start) makes the honest shift-spend delta computable.
     monkeypatch.setattr(report.probes, "ccusage_window",
-                        lambda: {"active": True, "remaining_minutes": 150, "total_tokens": 1})
+                        lambda: {"active": True, "remaining_minutes": 150,
+                                 "total_tokens": 500000, "cost_usd": 5.0})
+    monkeypatch.setattr(report.probes, "total_tokens_now", lambda: 500000)
     monkeypatch.setattr(report.probes, "free_ram_mb", lambda: 1000)
     st = shiftmod.load()
+    st["tokens_at_start"] = 174000    # spend delta = 500000-174000 = 326000 -> "~326k"
     shiftmod.mark_done(st, "t1")
     shiftmod.mark_parked(st, "t2", "gate")
     news = report.newspaper(st, isolated_home)
@@ -143,7 +147,10 @@ def test_newspaper_summary_first_and_word_cap(isolated_home, monkeypatch):
     # F6 backlog fix (taste passport): the one-sentence SUMMARY is the very first line,
     # the decorative title follows it (previously the title sat on line 1, summary on 2).
     assert "смена:" in lines[0]   # summary is now THE first line
-    assert "50%" in lines[0]      # (300-150)/300 = 50%
+    # The summary reports REAL shift spend (token delta), NOT the block-reset timer. The old
+    # misleading "50% окна" (elapsed block time shown as consumption) must be gone.
+    assert "326k" in lines[0] and "токенов" in lines[0]
+    assert "% окна" not in news and "съедено" not in news
     assert lines[1] == S.RU_REPORT_TITLE
     assert len(news.split()) <= 150
 

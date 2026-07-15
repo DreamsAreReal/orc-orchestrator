@@ -24,7 +24,14 @@ def _mins_since(epoch):
 
 
 def _window_pct(window):
-    """Percent of the 5h window consumed, best-effort. window from probes.ccusage_window."""
+    """Percent of the 5h block ELAPSED, best-effort. window from probes.ccusage_window.
+
+    DEPRECATED for the newspaper: this is the block-reset TIMER (time elapsed in the
+    5-hour block), NOT quota/token spend. It used to be shown as an "N% of window
+    consumed" line, which misled the operator into reading a schedule timer as resource
+    consumption (same time-vs-limits confusion removed from admission). The newspaper now
+    reports the REAL shift spend (token/cost delta) instead. Kept only for legacy capture.
+    """
     if not window or not window.get("active"):
         return None
     rem = window.get("remaining_minutes")
@@ -33,6 +40,50 @@ def _window_pct(window):
     total = 300.0  # 5h ccusage block
     used = max(0.0, total - float(rem))
     return int(round(used / total * 100))
+
+
+def _fmt_tokens(n):
+    """Format a token count compactly: 1234 -> '1.2k', 3260000 -> '3.3M', 900 -> '900'."""
+    n = int(n)
+    if n >= 1_000_000:
+        return "%.1fM" % (n / 1_000_000.0)
+    if n >= 1_000:
+        return "%.0fk" % round(n / 1_000.0)
+    return str(n)
+
+
+def shift_spend_text(state, window=None):
+    """The newspaper's HONEST shift-spend phrase (RU), or None if no figure is available.
+
+    We CANNOT compute a percent of the Max x20 subscription cap (ccusage does not know the
+    plan's quota ceiling), so we show the ABSOLUTE spend this shift -- a real number the
+    operator can watch -- never an invented percent.
+
+    Preference order:
+      1. per-task token delta summed over the shift (dispatcher.shift_spend) -- the most
+         precise attribution (each worker's own ccusage baseline);
+      2. whole-window token delta vs tokens_at_start captured at `orc start`;
+      3. USD delta vs cost_at_start (fallback when token deltas are unknown).
+    Returns the rendered RU_SPEND_SHIFT_* phrase (e.g. a "~326k tokens" / "~$0.3" spend
+    line), or None when no figure is available.
+    """
+    from . import dispatcher  # lazy: avoid any import-order coupling
+    spent = dispatcher.shift_spend(state)
+    if spent is None:
+        # fall back to the whole-window token delta vs the start-of-shift baseline
+        base = state.get("tokens_at_start")
+        now = probes.total_tokens_now()
+        if base is not None and now is not None:
+            spent = max(0, int(now) - int(base))
+    if spent is not None:
+        return S.RU_SPEND_SHIFT_TOKENS.format(tokens=_fmt_tokens(spent))
+    # last resort: USD delta vs the start-of-shift cost baseline
+    cbase = state.get("cost_at_start")
+    cnow = probes.total_cost_now()
+    if cbase is not None and cnow is not None:
+        cost = max(0.0, float(cnow) - float(cbase))
+        return S.RU_SPEND_SHIFT_COST.format(cost=("%.1f" % cost))
+    return None
 
 
 def _no_sandbox_active():
@@ -45,14 +96,19 @@ def _no_sandbox_active():
 
 
 def summary_line(state):
-    """First line of the newspaper: the whole shift in one grep-able sentence."""
+    """First line of the newspaper: the whole shift in one grep-able sentence.
+
+    Reports the REAL shift spend (token/cost delta) -- NOT the block-reset timer. When no
+    spend figure is available (ccusage down) the spend clause is omitted rather than
+    printing a misleading placeholder.
+    """
     done = len(state.get("done", []))
     waiting = len(state.get("parked", []))
     failed = len(state.get("failed", []))
-    window = probes.ccusage_window()
-    pct = _window_pct(window)
-    pct_s = "?" if pct is None else str(pct)
-    return S.RU_REPORT_SUMMARY.format(done=done, waiting=waiting, failed=failed, pct=pct_s)
+    spend = shift_spend_text(state)
+    spend_clause = ("; " + spend) if spend else ""
+    return S.RU_REPORT_SUMMARY.format(
+        done=done, waiting=waiting, failed=failed, spend=spend_clause)
 
 
 def queued_lines(ready_tasks):
@@ -104,13 +160,14 @@ def live_status(state, hub, window=None, ready_tasks=None):
                 id=w.get("task"), phase=w.get("phase", "build"),
                 status="active", mins=mins, tokens=tok_s))
 
-    # Pool footer.
-    pct = _window_pct(window)
+    # Pool footer. HONEST labels: shift spend (real tokens/USD) + minutes until the LIMIT
+    # WINDOW RESETS (a schedule timer, labelled as such -- never as "spent") + free RAM.
     mins_left = window.get("remaining_minutes") if window else None
     ram = probes.free_ram_mb()
     ram_s = "ok" if (ram is not None) else "?"
+    spend = shift_spend_text(state) or S.RU_SPEND_UNKNOWN
     lines.append(S.RU_POOL_LINE.format(
-        pct=("?" if pct is None else pct),
+        spend=spend,
         mins_left=("?" if mins_left is None else mins_left),
         ram=ram_s))
     return "\n".join(lines)

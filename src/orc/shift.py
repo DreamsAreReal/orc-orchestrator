@@ -11,8 +11,13 @@ Format:
     "parked":  [{"task","reason","ts"}],
     "done":    [{"task","ts"}],
     "failed":  [{"task","reason","ts"}],
-    "window_pct_at_start": <int or null>
+    "window_pct_at_start": <int or null>,     # legacy, kept for back-compat (unused)
+    "tokens_at_start": <int or null>,         # ccusage totalTokens captured at shift start
+    "cost_at_start":   <float or null>        # ccusage costUSD captured at shift start
   }
+The shift's honest spend = current ccusage total minus the *_at_start baseline. This is a
+REAL resource figure (tokens / USD), not the block-reset timer (window_pct_at_start is the
+old, misleading "time elapsed in the 5-hour block" and is no longer surfaced).
 """
 import os
 import json
@@ -28,7 +33,9 @@ def _empty():
         "parked": [],
         "done": [],
         "failed": [],
-        "window_pct_at_start": None,
+        "window_pct_at_start": None,   # legacy (block-reset timer); no longer surfaced
+        "tokens_at_start": None,       # ccusage totalTokens baseline for shift-spend
+        "cost_at_start": None,         # ccusage costUSD baseline (fallback shift-spend)
     }
 
 
@@ -60,9 +67,16 @@ def save(state):
     return path
 
 
-def start_shift(state, window_pct=None):
+def start_shift(state, window_pct=None, tokens_at_start=None, cost_at_start=None):
+    """Mark the shift started and capture the ccusage spend baseline.
+
+    tokens_at_start / cost_at_start are the ccusage totals at shift start; the newspaper's
+    honest shift-spend figure is (current total - this baseline). window_pct is the legacy
+    block-reset timer, retained for back-compat only (no longer shown as "spent")."""
     state["started"] = _now_iso()
     state["window_pct_at_start"] = window_pct
+    state["tokens_at_start"] = tokens_at_start
+    state["cost_at_start"] = cost_at_start
     return state
 
 

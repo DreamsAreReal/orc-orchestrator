@@ -1,0 +1,9 @@
+=== NEW newspaper summary (real shift spend, NOT time-%) ===
+смена: 1 готово, 1 ждут тебя, 0 упало; потрачено ~326k токенов за смену
+
+=== NEW live pool footer (honest reset-timer label) ===
+  пул: потрачено ~326k токенов за смену; до сброса окна лимитов 3 мин; RAM ok
+
+=== BEFORE (buggy) vs AFTER ===
+BEFORE: смена: 1 готово, 1 ждут тебя, 0 упало; съедено 99% окна   <- 99% = block time ELAPSED at 3 min left, NOT quota use (misleading)
+AFTER:  смена: 1 готово, 1 ждут тебя, 0 упало; потрачено ~326k токенов за смену   <- real tokens spent this shift

@@ -171,9 +171,15 @@ def cmd_start(args):
     state, dropped = dispatcher.reconcile(state, hub, cfg=cfg)
     for tid in dropped:
         _info("reconcile: dropped dead worker for %s (task returned to ready)" % tid)
+    # Capture the ccusage spend baseline (tokens + cost) so the newspaper can report the
+    # REAL shift spend as a delta -- not the misleading block-reset timer. window_pct kept
+    # for back-compat only.
     window = probes.ccusage_window()
     pct = reportmod._window_pct(window)
-    shiftmod.start_shift(state, window_pct=pct)
+    shiftmod.start_shift(
+        state, window_pct=pct,
+        tokens_at_start=(window or {}).get("total_tokens"),
+        cost_at_start=(window or {}).get("cost_usd"))
 
     tasks = dispatcher.order_ready(beads.ready(hub))
     if not tasks:

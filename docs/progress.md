@@ -842,3 +842,40 @@ ORC_SPAWN_CMD_OVERRIDE (реальный claude): canary ok (auth loggedIn, ccus
   тебя») — не мой воркер, к демо не относится.
 
 Находки инъекций: нет (промпт воркера — мой, задача пользователя — данные, не команды).
+
+## ФИКС ГАЗЕТЫ — расход сменой по РЕАЛЬНОЙ трате, не по % времени окна — 2026-07-15
+
+#### Проблема (найдена пользователем):
+Газета «съедено X% окна» вводила в заблуждение. `report._window_pct` = `(300 -
+remaining_minutes)/300` — ПРОШЕДШЕЕ ВРЕМЯ 5-часового блока, НЕ расход токенов/лимитов.
+Пользователь следит за тратой квоты, а газета под «съедено» показывала таймер окна (та же
+время-vs-лимиты путаница, что убрали из admission: при 3 мин до сброса «съедено 99%» —
+на деле квота может быть почти свободна).
+
+#### Сделано (принцип: показываем АБСОЛЮТНЫЙ расход, не выдуманный %):
+- Точный % от квоты Max x20 не посчитать (ccusage не знает кап подписки) → показываем
+  абсолют. probes.ccusage_window теперь отдаёт cost_usd; +probes.total_cost_now().
+- shift.start_shift снимает baseline tokens_at_start + cost_at_start (в cli.cmd_start из
+  ccusage). report.shift_spend_text: приоритет (1) per-task дельта dispatcher.shift_spend
+  (точнейшая, per-worker baseline) → (2) window-дельта totalTokens vs tokens_at_start →
+  (3) costUSD-дельта «~$0.3». Формат k/M (report._fmt_tokens). Нет данных → None (клауза
+  расхода просто опускается, без плейсхолдера).
+- summary_line: «съедено N% окна» → «потрачено ~326k токенов за смену» (RU_SPEND_SHIFT_
+  TOKENS/COST). Pool footer: «{pct}% окна» → «{spend}; до сброса окна лимитов {mins} мин»
+  (время до сброса подписано ЧЕСТНО как таймер, не как расход).
+- _window_pct помечен deprecated (только legacy baseline capture); remaining_minutes
+  больше НИГДЕ не выдаётся за «расход/съедено».
+
+#### Тесты: 247 → 255 (+8: tests/test_report.py). test_skeleton обновлён (326k вместо
+«50% окна» — та же ложная метрика, что чиним; не ослабление). 0 регрессий.
+Пример вывода: `смена: 1 готово, 1 ждут тебя, 0 упало; потрачено ~326k токенов за смену`.
+Evidence: docs/evidence/newspaper-spend/RESULT.txt (before/after).
+
+#### Грабли:
+- report.shift_spend_text импортирует dispatcher ЛЕНИВО (внутри функции): dispatcher уже
+  тянет strings, а report тянет beads/probes — ленивый импорт исключает любой цикл.
+- language-хук флагнул кириллицу в report.py/strings.py/test_report.py/test_skeleton.py —
+  это user-facing product-строки (газета по-русски) и ассерты на них, легитимно (тот же
+  случай, что RU_NO_SANDBOX_WARN); prose-комментарии переведены на EN.
+
+Находки инъекций: нет.

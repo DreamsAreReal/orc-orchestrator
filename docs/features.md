@@ -36,13 +36,14 @@ North Star: утром накидал ~10 задач по проектам — M
 Приёмка:
 - [x] canary печатает отчёт (bd/auth/ccusage/RAM/спавн-терминала); подставной фейл → смена не стартует (G7)
 - [x] `orc start` спавнит реальный интерактивный терминал с claude (не headless), задача «создай hello.txt со словом ready» выполняется, файл появляется
-- [x] `orc status` печатает газету: первая строка = сводка (N done/parked/failed + % окна), первый экран ≤150 слов
+- [x] `orc status` печатает газету: первая строка = сводка (N done/parked/failed + РЕАЛЬНЫЙ расход токенов сменой), первый экран ≤150 слов
 Проверка: `bash .verify/e2e-skeleton.sh` + вывод в `docs/evidence/F2/`
 Статус: verified
 Доказательство:
 - `bash .verify/e2e-skeleton.sh` → "F2 SKELETON PASS", exit 0. РЕАЛЬНЫЙ osascript-терминал с интерактивным claude создал hello.txt=[ready] за ~14с; G7 forced-fail отказал старт; газета ≤150 слов. Лог: docs/evidence/F2/e2e-skeleton.log
 - `python3 -m pytest tests/test_skeleton.py` → 13 passed (config/shift/ordering/report/canary). Лог: docs/evidence/F2/unit-tests.log
 - команда запуска: `bin/orc {init|add <proj> "<text>"|start [--once]|status [--newspaper]} [--json]`
+- [КРИТ-ФИКС ГАЗЕТЫ 2026-07-15, найден пользователем] сводка/итог-пула БОЛЬШЕ НЕ показывают «съедено N% окна». `_window_pct = (300-remaining_minutes)/300` — это ПРОШЕДШЕЕ ВРЕМЯ 5-часового блока, а НЕ расход квоты (та же время-vs-лимиты путаница, что убрана из admission). Теперь сводка показывает РЕАЛЬНЫЙ расход сменой (дельта ccusage totalTokens от tokens_at_start, снятого при `orc start`; формат k/M; фолбэк — дельта costUSD «~$0.3»). Время до сброса блока подписано ЧЕСТНО отдельной строкой «до сброса окна лимитов N мин», НЕ как «съедено». Абсолют, не выдуманный % (ccusage не знает кап Max x20). Тесты: tests/test_report.py 8 passed (формат k/M, per-task-дельта→window-дельта→cost-фолбэк→None, сводка/футер без «% окна», omit при ccusage-down) + обновлён test_skeleton (326k вместо «50% окна»). Пример: `смена: 1 готово, 1 ждут тебя, 0 упало; потрачено ~326k токенов за смену`. Evidence: docs/evidence/newspaper-spend/
 
 ### F3 — `orc add` / `orc status` (live) + JSON везде [M1]
 Ворота: G11, часть G12. Опыт/ценность: постановка ≤5 мин; живой status (такт «день»).
