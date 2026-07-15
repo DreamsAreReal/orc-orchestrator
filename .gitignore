@@ -7,3 +7,5 @@ shift.json
 .env
 .env.*
 !.env.example
+.beads/
+*.dolt
