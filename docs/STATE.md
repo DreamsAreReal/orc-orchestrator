@@ -11,7 +11,7 @@ Workspace: /Users/admin/orchestrator
 - [x] 1 RESEARCH — exit: RS-00/00b/00c (12+12+14 углов), RS-01+appendix, RS-02 (инвентарь патча), 7 проб PASS, критика 2 раунда (блокеры закрыты; 2 СУЩ — документальные, вносятся в ТЗ), синтез П1-П8 в STATE
 - [x] 2 ТЗ — Гейт ТЗ: УТВЕРЖДЕНО 2026-07-15T04:40:00+04:00 — режим: полный — чекпойнт после скелета: ДА (F1 = газета+canary)
 - [x] 3 DESIGN — design.md + ADR-0001/0002 + features.md (F1-F12, M1-M4) ПРИНЯТО critic-ом (2 раунда, финал ПРИНЯТО-С-ЗАМЕЧАНИЯМИ)
-- [ ] 4 BUILD (builder; счётчик майлстоунов: 3/4 — M1..M4) — M1+M2 verified (F1-F9,F14,F15; evaluator раунд 3 ПРИНЯТО, 175 тестов). Husk РЕШЁН: shellExitAction=0 на профиле Clear Dark (по выбору пользователя close-always) + orc setup делает это воспроизводимым (F10). M3 ДОСТИГНУТ: F10 self-pass (LaunchAgent Aqua auth=0, orc stop ≤10с, config-driven, orc setup husk-фикс) + F13 self-pass (OS-sandbox seatbelt блокирует 5 обфусцированных обходов на уровне ОС, доказано и юнитами, и реальным сквозным спавном; спайк .spikes/probe/sandbox.md); 200 тестов, 0 регрессий. Ждёт evaluator M3 → M4 (F11 патчи конвейера + F12 живой E2E).
+- [ ] 4 BUILD (builder; счётчик майлстоунов: 4/4 — M1..M4 self-pass) — M1+M2+M3 verified. M4 ДОСТИГНУТ (self-pass): F11 патчи конвейера (docs/tasks/<slug>/, характеризация 0-регрессий+откат, ветка ~/.claude 7b57e2f) + G0c git-push долг ЗАКРЫТ (env лишает push-кредов, push-wall.sh падает по auth) + F12 финальный живой E2E (3/3 реальных задачи до терминала, внешние факты; первый живой прогон поймал+починил 3 бага среды seatbelt/preflight; husk-фикс закрывает окна завершённых воркеров; F6 реальная дельта 19%→43%). 210 тестов, 0 регрессий. Ждёт evaluator M4 → фаза 5.
 - [ ] 5 VERIFY (финал + ретро)
 Статусы завершения: DONE-WAVE-N (предложена волна N+1; НЕ конец) | BETA (нетерминальный, ждёт решения пользователя) | DONE (пользователь сказал «хватит»)
 
@@ -24,8 +24,12 @@ Research-вход: docs/research/RS-01-wave-A-architecture.md (+ appendix), во
 Ведение: фазы 1-2 спекулятивно свёрнуты к lite (ресерч уже выполнен волнами); режим ратифицируется пользователем на гейте ТЗ.
 
 ## Следующий шаг
-M1+M2+M3 verified (F1-F15 кроме F11/F12; 200 тестов). Окно ccusage ~247 мин — хватит на F12. → M4 = F11 (патчи ~/.claude/skills/pipeline под docs/tasks/<слаг>/ — improvement, рамка «чужой код», характеризационный набор до/после, откат git-revert) + F12 (финальный живой E2E: 3 задачи/2 проекта/1 гейт на РЕАЛЬНОМ claude — тут вживую: husk-фикс закрывает окна, реальная дельта расхода F6, весь контур end-to-end).
-ДОЛГ до DONE (G0c, из eval M3): обфусцированный git push НЕ заблокирован (sandbox = только file-write, F1-хук = паттерн). Закрыть в M4/финале: лишить воркера push-возможности (read-only remote / нет git-кредов в env — проверить, что обфусцированный git push из-под воркера проваливается по auth). NB: сторож caffeinate активен — не трогать.
+МАЙЛСТОУН M4 ДОСТИГНУТ (self-pass): F11 + F12 + долг G0c закрыты, 210 тестов зелёные.
+- F11 (патчи конвейера): pipeline-hooks.py+scorecard+SKILL/phase-0 под `docs/tasks/<slug>/` (КАНОН кода, не RS-02); ветка ~/.claude `orc-tasks-workspace-patch` коммит 7b57e2f; характеризация ДО/ПОСЛЕ: doctor+scorecard-standard IDENTICAL (0 регрессий), tasks-раскладка находится (scorecard 4→8, hook 0→1); откат git-revert проверен (doctor exit 0).
+- G0c (git-push долг): лишён push-возможности в env воркера (GIT_ASKPASS=false + credential.helper='' в spawn); .verify/push-wall.sh — обфусцированный push падает по auth, sentinel не ушёл; claude OAuth + public fetch не тронуты.
+- F12 (живой E2E, владелец G1): 3/3 задачи до терминала на РЕАЛЬНОМ claude (2 коммита + гейт-парковка, внешние факты), газета корректна, сериализация held. ПЕРВЫЙ живой прогон поймал+починил 3 бага среды (seatbelt блокировал claude session-env + /private/tmp/claude-501; preflight парковал на orc-артефакте docs/tasks). husk-фикс: завершённые воркеры окна сами закрыли; F6 реальная дельта: окно 19%→43% ($62), work-driven расход реален (per-task totalTokens кэшируется ccusage — честно).
+→ Фаза 5 VERIFY (финальная верификация + ретро). Ждёт evaluator M4.
+NB: сторож caffeinate (com.user.no-caffeinate) активен — не трогать. Ветка ~/.claude с патчем F11 НЕ смёржена в main (на evaluator/пользователя); orc-коммиты БЕЗ push (долг G0c + нет remote у ~/.claude).
 
 ## (архив) МАЙЛСТОУН M2 — R-M2 ДОРАБОТКА ЗАВЕРШЕНА (evaluator раунд 2, 4 блокера закрыты, ждёт раунд 3). F5 admission (6 реальных лимит-строк CLI), F6 бюджет+атрибуция (backlog-газета внесён; work-driven дельта честно → F12), F7 watchdog (0 ложных kill), F8 восстановление+РЕАЛЬНЫЙ воркер-PID через tty, F9 гейт (РЕАЛЬНОЕ osascript-уведомление + карточка ТЗ/цена/необратимое + окно держится). F15 ПЕРЕСМОТРЕНА: попытка «спавн в Ghostty» ПРОВАЛЕНА (Ghostty 1.3.1 `-e` не исполняет команду — пустое окно, спайк .spikes/probe/ghostty-exec.md); ОТКАТ дефолта на Terminal.app (исполняет надёжно). R-M2 блокеры закрыты: Б1 Ghostty→Terminal; Б2 регресс M1-петли→e2e-loop-close ЗЕЛЁНЫЙ на дефолте; Б3 F9 E2E FAIL→PASS; Б4 kill-restart жёг claude→seam-only. ЧЕСТНО: цель F15 «0 husk» НЕ достигнута — husk Terminal неустраним скриптом (TCC+профиль); существенное (воркер остановлен, RAM свободна) выполнено. 175 тестов; e2e-loop-close+e2e-gate+kill-restart зелёные на дефолте. Живой claude НЕ жёгся. NB: сторож caffeinate активен — не трогать. → evaluator M2 раунд 3, затем M3.
 
@@ -70,8 +74,8 @@ M1+M2+M3 verified (F1-F15 кроме F11/F12; 200 тестов). Окно ccusag
 | F9 | Гейт-протокол | M2 | ✓ | self-pass | — |
 | F10 | LaunchAgent+конфиг+killswitch+setup(husk-фикс) | M3 | | self-pass | — |
 | F13 | OS-sandbox (seatbelt) поверх F1-хука | M3 | | self-pass | — |
-| F11 | Патчи конвейера+откат | M4 | | todo | — |
-| F12 | E2E-смена (владелец G1) | M4 | | todo | — |
+| F11 | Патчи конвейера+откат | M4 | | self-pass | — |
+| F12 | E2E-смена (владелец G1) | M4 | ✓ | self-pass | — |
 
 ## Диспозишн находок consumer скелета M1 (2026-07-15) — ЧЕКПОЙНТ ПРОВАЛЕН
 - [КРИТИЧНО, core loop] газета не догоняет DONE: задача выполнена (файл+STATE=DONE), но `status --newspaper` = «0 готово/в работе». Причина: интерактивный воркер-claude не завершается сам, диспетчер НЕ детектит завершение → bd-задача не закрывается. Петля «накидал→смена→газета» разомкнута. → РЕШЕНИЕ ЭСКАЛИРОВАНО ПОЛЬЗОВАТЕЛЮ (чекпойнт). Механизм-кандидат: диспетчер поллит STATE.md/features активной задачи, terminal-статус → bd close + газета + (опц.) закрыть вкладку. Это ядро M2.

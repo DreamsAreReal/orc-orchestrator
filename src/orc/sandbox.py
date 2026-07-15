@@ -27,15 +27,70 @@ def _sb_quote(path):
     return path.replace("\\", "\\\\").replace('"', '\\"')
 
 
+# Claude Code's own runtime scratch dirs under ~/.claude that the Bash tool (and shell
+# snapshotting) MUST write to on every tool call. Without these the sandboxed worker's Bash
+# tool fails outright ("EPERM creating session-env" -> git commit never runs), which the
+# first real F12 shift surfaced. These are NARROW, specific runtime subpaths -- NOT all of
+# ~/.claude: the security-critical subpaths (skills/, agents/, settings.json, CLAUDE.md =
+# the worker's OWN enforcement) are deliberately NOT writable, so a worker cannot disable
+# its walls. TMPDIR is added by _claude_runtime_writes at profile-build time.
+_CLAUDE_RUNTIME_SUBDIRS = (
+    "session-env",      # per-Bash-call environment (the one that broke F12)
+    "shell-snapshots",  # shell state snapshot per Bash call
+    "projects",         # per-project session transcripts
+    "sessions",         # session metadata
+    "todos",            # todo state
+    "statsig",          # feature-flag cache
+    "logs",             # runtime logs
+    "file-history",     # edit history
+    "paste-cache",      # large-paste spool
+    "telemetry",        # telemetry spool
+)
+
+
+def _claude_runtime_writes():
+    """Narrow writable subpaths Claude Code needs to run its Bash tool + shell snapshots.
+
+    Returns realpaths under ~/.claude/<runtime-subdir>, the Bash-harness working dir
+    /private/tmp/claude-<uid>/ (per-project mangled scratch that the tool `mkdir`s on every
+    call -- its absence is what stalled the first real F12 shift with "EPERM ... mkdir
+    /private/tmp/claude-501/..."), and the OS temp dir (TMPDIR). Never includes ~/.claude
+    itself, its enforcement subpaths (skills/agents/settings.json), or a broad /private/tmp
+    parent (the negative-walls sentinel lives in $HOME, not in claude's own scratch)."""
+    paths = []
+    home_claude = os.path.join(os.path.expanduser("~"), ".claude")
+    for sub in _CLAUDE_RUNTIME_SUBDIRS:
+        paths.append(os.path.join(home_claude, sub))
+    # Claude Code's Bash-tool working dir: /private/tmp/claude-<uid>/ (uid-scoped, not the
+    # broad /private/tmp). This is claude's own harness scratch -- a worker writing here can
+    # only affect its own Bash sessions, never another project or a sentinel.
+    try:
+        uid = os.getuid()
+    except AttributeError:
+        uid = None
+    if uid is not None:
+        paths.append("/private/tmp/claude-%d" % uid)
+    tmpdir = os.environ.get("TMPDIR")
+    if tmpdir:
+        paths.append(tmpdir)
+    return paths
+
+
 def build_profile(workspace, extra_write_subpaths=None, deny_network=False):
-    """Build a seatbelt profile: deny file-write everywhere, allow ONLY the workspace.
+    """Build a seatbelt profile: deny file-write everywhere, allow ONLY the workspace
+    (plus Claude Code's own narrow runtime scratch dirs so the worker's Bash tool works).
 
     `workspace` is made writable via a narrow (subpath ...) rule -- NOT a broad parent.
     `extra_write_subpaths` may add tightly-scoped writable dirs the worker legitimately
     needs (e.g. a per-worker temp dir); each must be a specific path, never a broad parent.
     `deny_network` fully blocks outbound network (per-host allowlisting is unreliable in
     user seatbelt -- see the spike; the default keeps network on because workers need the
-    claude API / git fetch / brew, and git push stays blocked by the F1 hook).
+    claude API / git fetch / brew, and git push stays blocked by the F1 hook + the env
+    credential strip).
+
+    The workspace is still the ONLY place project files may be written; the extra runtime
+    subpaths are Claude's operational scratch (session-env, shell-snapshots, TMPDIR, ...),
+    which cannot reach other projects, ~/.ssh, or the worker's own enforcement files.
     """
     ws = os.path.realpath(workspace)
     lines = [
@@ -45,8 +100,13 @@ def build_profile(workspace, extra_write_subpaths=None, deny_network=False):
         '(allow file-write*',
         '  (subpath "%s"))' % _sb_quote(ws),
     ]
-    for p in (extra_write_subpaths or []):
+    runtime = list(_claude_runtime_writes()) + list(extra_write_subpaths or [])
+    seen = {ws}
+    for p in runtime:
         rp = os.path.realpath(p)
+        if rp in seen:
+            continue
+        seen.add(rp)
         lines.append('(allow file-write* (subpath "%s"))' % _sb_quote(rp))
     # the shell/claude need these device sinks even under a write-deny profile
     lines.append(

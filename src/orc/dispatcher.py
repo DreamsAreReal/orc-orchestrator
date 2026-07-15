@@ -357,11 +357,20 @@ def prepare_worker_walls(cfg, project):
     return path, merged
 
 
-# The .claude/settings.json we write for walls is OUR artifact; a tree dirty only
-# because of it is still "clean" from the operator's point of view. dirty_paths uses
-# -uall so untracked dirs are expanded; we still tolerate a collapsed ".claude/" entry.
+# Artifacts orc itself generates in a project are OUR own; a tree dirty only because of
+# them is still "clean" from the operator's point of view, so a later task on the same
+# project is not falsely parked as "a human may be mid-edit". dirty_paths uses -uall so
+# untracked dirs are expanded; we still tolerate a collapsed ".claude/" / ".orc/" entry.
+#   .claude/settings.json  -> the worker deny-walls we write (F1)
+#   .orc/                  -> the seatbelt sandbox profile we write (F13)
+#   docs/tasks/            -> the two-layer task mini-pipe workspace incl. the loop-close
+#                             STATE.md the worker writes (F11/F14) -- orc-managed, never a
+#                             human's mid-edit. This is what unblocked a same-project second
+#                             task in the first real F12 shift (t1's STATE.md left the tree
+#                             dirty and parked the gate task).
 _OURS_PREFIXES = (
     ".claude/settings.json", ".claude/settings.json.tmp", ".claude/",
+    ".orc/", "docs/tasks/",
 )
 
 
@@ -499,8 +508,21 @@ def start_prompt(project, slug, text):
     real shifts use the pipeline wrapper so the conveyor's quality gates apply.
     ORC_PROMPT_OVERRIDE (with ORC_RAW_PROMPT=1) supplies a verbatim prompt -- used by the
     F14 loop-close E2E to make the worker also write its task STATE.md (the polled signal).
+    ORC_PROMPT_DIR (with ORC_RAW_PROMPT=1) points at a directory of per-slug prompt files
+    (`<dir>/<slug>`); the matching file's contents become the worker prompt -- used by the
+    F12 final E2E to drive several different real tasks in one shift. The spawn path stays
+    100% real (real claude, real work); only WHICH prompt is chosen is seam-controlled.
     """
     if os.environ.get("ORC_RAW_PROMPT") == "1":
+        pdir = os.environ.get("ORC_PROMPT_DIR")
+        if pdir:
+            pf = os.path.join(pdir, slug)
+            if os.path.isfile(pf):
+                try:
+                    with open(pf) as fh:
+                        return fh.read()
+                except OSError:
+                    pass
         override = os.environ.get("ORC_PROMPT_OVERRIDE")
         return override if override else text
     return (

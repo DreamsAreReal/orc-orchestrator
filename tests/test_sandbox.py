@@ -116,3 +116,34 @@ def test_start_command_falls_back_when_seatbelt_absent(tmp_path, monkeypatch):
 def test_sandbox_default_on_in_config():
     assert config.DEFAULTS["sandbox"] is True
     assert config.DEFAULTS["sandbox_deny_network"] is False
+
+
+# --------------------------------------------------------------------------- #
+# Claude runtime scratch (F12 fix): the Bash tool needs ~/.claude/session-env etc.,
+# but the worker's OWN enforcement (skills/agents/settings.json) stays non-writable.
+# --------------------------------------------------------------------------- #
+def test_profile_allows_claude_runtime_scratch(tmp_path):
+    prof = sandbox.build_profile(str(tmp_path))
+    home_claude = os.path.join(os.path.expanduser("~"), ".claude")
+    # the dir whose absence broke the first real F12 shift MUST be writable now
+    assert (home_claude + "/session-env") in prof
+    assert (home_claude + "/shell-snapshots") in prof
+
+
+def test_profile_does_not_allow_enforcement_paths(tmp_path):
+    prof = sandbox.build_profile(str(tmp_path))
+    home_claude = os.path.join(os.path.expanduser("~"), ".claude")
+    # a worker must NOT be able to write its own walls: no broad ~/.claude allow, and none
+    # of the enforcement subpaths appear as an allowed subpath.
+    assert ('(subpath "%s"))' % home_claude) not in prof   # not the whole ~/.claude
+    for enforce in ("/skills", "/agents", "/settings.json", "/CLAUDE.md"):
+        assert ('(subpath "%s%s")' % (home_claude, enforce)) not in prof
+
+
+def test_profile_runtime_paths_are_narrow_not_home(tmp_path):
+    # None of the allowed write subpaths may be $HOME or a broad parent of it.
+    prof = sandbox.build_profile(str(tmp_path))
+    home = os.path.expanduser("~")
+    assert ('(subpath "%s"))' % home) not in prof
+    # workspace itself is still allowed
+    assert ('(subpath "%s"' % os.path.realpath(str(tmp_path))) in prof

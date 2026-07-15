@@ -596,3 +596,62 @@ exit 128, sentinel не ушёл. Стена нагружена (базлайн 
   нет (ленивый import внутри generate_worker_settings). Все 204 теста зелёные.
 
 Находки инъекций: нет (спайк-вывод/GitHub-ответы — данные).
+
+## F12 — ФИНАЛЬНЫЙ живой E2E (3 задачи / 2 проекта / 1 гейт, владелец G1) — self-pass 2026-07-15
+
+ПЕРВЫЙ НАСТОЯЩИЙ ПРОГОН С РЕАЛЬНЫМ CLAUDE. Три задачи через весь контур: t1 (orc-test-1,
+create READY.txt+commit), t2 (orc-test-2, create HELLO.txt+commit), гейт (orc-test-1,
+паркуется на гейте). Изолированный hub (реальный ~/.orc не тронут), реальные git-репо на
+~/Desktop. `bash .verify/e2e-shift.sh` → PASS exit 0.
+
+РЕЗУЛЬТАТ (внешние факты, не заявление воркера): t1 коммит 6c6fdea + READY.txt=ready;
+t2 коммит f1c29a8 + HELLO.txt=hello; гейт STATE.md «waiting on gate». Газета «2 готово,
+1 ждут тебя, 0 упало; 43% окна» + гейт-карточка. Сериализация orc-test-1: гейт спавнился
+ПОСЛЕ t1 (order_ready в конец), 0 пересечений/дублей.
+
+ТРИ БАГА СРЕДЫ ПОЙМАНЫ ПЕРВЫМ ЖИВЫМ ПРОГОНОМ (ровно принцип паранойи — «работает» доказано
+прогоном, не памятью), ПОЧИНЕНЫ, регресс-тесты добавлены:
+1. Seatbelt F13 блокировал claude-runtime `~/.claude/session-env`+`shell-snapshots` → Bash-
+   tool воркера падал («EPERM session-env»), git commit невозможен (воркер создавал файл
+   через Write, но commit через Bash — нет). Фикс sandbox._claude_runtime_writes: узкие
+   claude-runtime подпути (session-env/shell-snapshots/projects/…), НЕ весь ~/.claude —
+   enforcement (skills/agents/settings.json) остаётся недоступен воркеру (не может снять
+   свои стены). Тесты: allows-runtime-scratch, NOT-enforcement-paths, narrow-not-home.
+2. Seatbelt блокировал Bash-harness `/private/tmp/claude-<uid>/` (claude mkdir'ит per-call)
+   → «EPERM mkdir /private/tmp/claude-501». Фикс: узкий allow `/private/tmp/claude-<uid>`
+   (uid-scoped, НЕ широкий /private/tmp; sentinel живёт в $HOME — стена держит; проверено
+   sandbox-walls.sh перепрогоном: 5 обфусцированных обходов + ~/.ssh всё ещё заблокированы).
+3. preflight парковал 2-ю задачу проекта на грязном `docs/tasks/<slug>/STATE.md` (orc-
+   артефакт t1) как «человек в репо». Фикс `_OURS_PREFIXES` += `docs/tasks/`+`.orc/` (orc-
+   managed). Тесты: task-state-dirty→ok, human-edit-despite-task-state→park (стена не ослаблена).
+
+ЖИВЫЕ ПРОВЕРКИ:
+- (а) HUSK-ФИКС РАБОТАЕТ: завершённые воркеры (t1/t2) — окна САМИ ЗАКРЫЛИСЬ после чистого
+  stop диспетчера (shellExitAction=0, профиль Clear Dark). Гейт-воркер окно ДЕРЖИТ живьём
+  (busy=true) — F9-дизайн (слот ждёт оператора), не husk; его close_worker тоже закрыл окно.
+  ЧЕСТНО: husk от ВНЕШНЕГО kill -9 (мои cleanup вне чистого stop) неустраним скриптом —
+  прежнее ограничение среды (F15), но ЧИСТЫЙ путь диспетчера окна закрывает (доказано).
+- (б) F6 РЕАЛЬНАЯ ДЕЛЬТА (отложенная приёмка ЗАКРЫТА, честно): окно 19%→43% (+24пп), $62 —
+  воркеры реально жгли. Per-task totalTokens-дельта=0: ccusage кэширует totalTokens актив-
+  ного блока (нестабильный JSONL — задокументированный риск-мап; общий пул). Формула верна
+  (test_budget), work-driven расход реален на уровне окна (remainingMinutes/costUSD движутся).
+- (в) весь путь накидал→смена→газета вживую (add×3→daemon-петля→до терминала→poll→bd close+
+  газета+стоп).
+
+Решения:
+- Реальный claude через ORC_RAW_PROMPT + ORC_PROMPT_DIR (per-slug prompt seam, добавлен в
+  start_prompt): спавн/монитор/детект/close/газета/сериализация — 100% реальны, seam лишь
+  ВЫБИРАЕТ промпт (не подменяет claude). Полный pipeline-wrapper для micro-задач избыточен
+  и сжёг бы окно — простые задачи по ТЗ («create FILE+commit»).
+- Sandbox: узкие claude-scratch подпути, НЕ широкий ~/.claude/tmp — enforcement воркеру
+  недоступен, sentinel в $HOME цел. Дифф минимален, стена F13 не ослаблена.
+
+Грабли:
+- Первый прогон: воркер создал файл (Write), но не закоммитил — Bash-tool упал на sandbox
+  (session-env EPERM). Второй: /private/tmp/claude-501 EPERM. Третий (после 2 sandbox-фиксов):
+  гейт запаркован preflight-ом на грязном docs/tasks STATE.md. Каждый — реальный баг среды,
+  пойман экраном воркера (osascript contents), не догадкой. 3 фикса → чистый прогон PASS.
+- ccusage totalTokens кэшируется между короткими чтениями (before==after==66190129) —
+  честно вынесено как ограничение, не спрятано.
+
+Находки инъекций: нет (экраны воркеров, ccusage-вывод, STATE.md прогонов — данные).

@@ -107,6 +107,16 @@ def test_start_prompt_raw_vs_pipeline(monkeypatch):
     assert dispatcher.start_prompt("/proj", "slug", "do the thing") == "do the thing"
 
 
+def test_start_prompt_per_slug_dir(monkeypatch, tmp_path):
+    # F12 seam: ORC_PROMPT_DIR selects a per-slug prompt file for the worker.
+    monkeypatch.setenv("ORC_RAW_PROMPT", "1")
+    monkeypatch.setenv("ORC_PROMPT_DIR", str(tmp_path))
+    (tmp_path / "make-widget").write_text("build the widget and commit")
+    assert dispatcher.start_prompt("/p", "make-widget", "x") == "build the widget and commit"
+    # a slug with no file falls back to the task text
+    assert dispatcher.start_prompt("/p", "no-file", "fallback text") == "fallback text"
+
+
 # --------------------------------------------------------------------------- #
 # beads metadata parsing
 # --------------------------------------------------------------------------- #

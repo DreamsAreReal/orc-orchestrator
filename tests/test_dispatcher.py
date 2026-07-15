@@ -66,6 +66,34 @@ def test_preflight_dirty_only_our_settings_ok(tmp_path):
     assert ok is True and reason is None
 
 
+def test_preflight_dirty_only_task_state_ok(tmp_path):
+    # F12 fix: a prior task's docs/tasks/<slug>/STATE.md (orc's loop-close artifact) left
+    # the tree dirty -> a second task on the same project must NOT be parked as human WIP.
+    repo = _repo(str(tmp_path / "taskdirty"))
+    td = os.path.join(repo, "docs", "tasks", "prior-task")
+    os.makedirs(td)
+    with open(os.path.join(td, "STATE.md"), "w") as f:
+        f.write("Status: DONE\n")
+    os.makedirs(os.path.join(repo, ".orc"))
+    with open(os.path.join(repo, ".orc", "sandbox.sb"), "w") as f:
+        f.write("(version 1)\n")
+    ok, reason = dispatcher.preflight(repo)
+    assert ok is True and reason is None
+
+
+def test_preflight_human_edit_still_parks_despite_task_state(tmp_path):
+    # the ours-allowance must not mask a real human edit elsewhere in the tree.
+    repo = _repo(str(tmp_path / "mixeddirty"))
+    td = os.path.join(repo, "docs", "tasks", "prior-task")
+    os.makedirs(td)
+    with open(os.path.join(td, "STATE.md"), "w") as f:
+        f.write("Status: DONE\n")
+    with open(os.path.join(repo, "human_wip.py"), "w") as f:
+        f.write("half-written\n")
+    ok, reason = dispatcher.preflight(repo)
+    assert ok is False and "human_wip.py" in reason
+
+
 # --------------------------------------------------------------------------- #
 # re-validate
 # --------------------------------------------------------------------------- #

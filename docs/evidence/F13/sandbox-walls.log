@@ -1,10 +1,22 @@
-generated profile: /private/tmp/orc-f13-ws.YNvKeZ/.orc/sandbox.sb
+generated profile: /private/tmp/orc-f13-ws.37IRnR/.orc/sandbox.sb
 --- profile contents ---
 (version 1)
 (allow default)
 (deny file-write*)
 (allow file-write*
-  (subpath "/private/tmp/orc-f13-ws.YNvKeZ"))
+  (subpath "/private/tmp/orc-f13-ws.37IRnR"))
+(allow file-write* (subpath "/Users/admin/.claude/session-env"))
+(allow file-write* (subpath "/Users/admin/.claude/shell-snapshots"))
+(allow file-write* (subpath "/Users/admin/.claude/projects"))
+(allow file-write* (subpath "/Users/admin/.claude/sessions"))
+(allow file-write* (subpath "/Users/admin/.claude/todos"))
+(allow file-write* (subpath "/Users/admin/.claude/statsig"))
+(allow file-write* (subpath "/Users/admin/.claude/logs"))
+(allow file-write* (subpath "/Users/admin/.claude/file-history"))
+(allow file-write* (subpath "/Users/admin/.claude/paste-cache"))
+(allow file-write* (subpath "/Users/admin/.claude/telemetry"))
+(allow file-write* (subpath "/private/tmp/claude-501"))
+(allow file-write* (subpath "/private/var/folders/sf/ldf4zy1x0yd9431jnprl_zg00000gn/T"))
 (allow file-write-data (literal "/dev/null") (literal "/dev/stdout") (literal "/dev/stderr") (literal "/dev/tty"))
 
 === A direct rm outside ws ===
@@ -31,7 +43,7 @@ rm: /Users/admin/orc-f13-probe-out/sentinel.txt: Operation not permitted
 bash: /Users/admin/.ssh/orc_f13_probe: Operation not permitted
   RESULT: ~/.ssh write BLOCKED by OS-sandbox [ok]
 === control write inside ws ===
-  inner : echo ok > '/tmp/orc-f13-ws.YNvKeZ/inside.txt'
+  inner : echo ok > '/tmp/orc-f13-ws.37IRnR/inside.txt'
   RESULT: write inside workspace works [ok] (sandbox is not a brick wall)
 
 === RESULT ===
