@@ -72,7 +72,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] фикстуры лимит-строк: session→парковка+время ресета, weekly→глубокая, Opus→деградация, 429→ретрай (100% фикстур) (G4)
 - [x] допуск: ready≠∅ + окно/RAM ok → spawn ≤60 сек; нехватка RAM → не спавнит (G12)
 Проверка: `python3 -m pytest tests/test_admission.py` (фикстуры tests/fixtures/limit-*.txt)
-Статус: self-pass
+Статус: verified
 Доказательство:
 - `bash .verify/admission.sh` → "F5 ADMISSION PASS (6/6 fixtures classified + admission gate correct on RAM/window/limit)", exit 0. 6 РЕАЛЬНЫХ лимит-строк CLI (code.claude.com/docs/en/errors): session→park+reset 3:45pm, weekly→park+reset Mon 12:00am, Opus→degrade, 429/529→retry (no park), none→no-limit. Лог: docs/evidence/F5/admission.log
 - `python3 -m pytest tests/test_admission.py` → 23 passed (классификация×7, парс ресет-времени×4, гейт RAM/окно/ready/limit×12). Лог: docs/evidence/F5/unit-tests.log
@@ -87,7 +87,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] задача с заниженным капом останавливается с парковкой и записью в газету (G8)
 - [x] кап смены превышен → новые задачи не стартуют
 Проверка: `python3 -m pytest tests/test_budget.py` + живой прогон (evidence/F6/)
-Статус: self-pass
+Статус: verified
 Доказательство:
 - `bash .verify/budget.sh` → "F6 BUDGET PASS (spend-attribution formula vs REAL ccusage + monotonicity; low-cap park; newspaper DONE/WAVE/BETA; summary-first). Work-driven delta deferred to F12", exit 0. ФОРМУЛА атрибуции (task_spend = дельта ccusage) проверена против РЕАЛЬНОГО live-чтения ccusage (63M ток.) + монотонности (real re-read delta≥0); синтетический инкремент 12345 — проверка ФОРМУЛЫ, НЕ измерение работы. Work-driven дельта — приёмка F12. Лог: docs/evidence/F6/budget.log
 - `python3 -m pytest tests/test_budget.py` → 15 passed (spend-атрибуция×5, task-cap×5, shift-cap×2, done_kind/newspaper DONE/wave/BETA + summary-first×3). Лог: docs/evidence/F6/unit-tests.log
@@ -102,7 +102,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] живой Bash-вызов ≥2 мин НЕ убивается (0 ложных kill)
 - [x] рестарт только после внешней проверки пост-условий; cap соблюдается → эскалация
 Проверка: `python3 -m pytest tests/test_watchdog.py`
-Статус: self-pass
+Статус: verified
 Доказательство:
 - `bash .verify/watchdog.sh` → "F7 WATCHDOG PASS (loop + silence detected; long tool spared = 0 false kills; restart bounded, cap escalates)", exit 0. Синтетика (без claude): 4 одинаковых hash→LOOP; heartbeat 300с назад без маркера→SILENCE; маркер in-flight держится 200с (=живой Bash ≥2мин)→verdict OK (0 ложных kill); no-progress→restart, real-progress→spared, cap=2→escalate. Лог: docs/evidence/F7/watchdog.log
 - `python3 -m pytest tests/test_watchdog.py` → 18 passed (heartbeat/marker×2, loop×4, silence+false-kill-guard×5, external-check×2, bounded-recovery×5). Лог: docs/evidence/F7/unit-tests.log
@@ -115,7 +115,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] kill -9 диспетчера посреди смены → рестарт продолжает, 0 дублей/потерь задач (G6)
 - [x] мёртвый воркер (PID нет) → его задача возвращается в ready (lease)
 Проверка: `bash .verify/kill-restart.sh`
-Статус: self-pass
+Статус: verified
 Доказательство:
 - `bash .verify/kill-restart.sh` → "F8 RECOVERY PASS (real PID; live worker adopted; crash -> lease; seam-only, no claude)", exit 0. R-M2 БЛОКЕР-4 ЗАКРЫТ: seam-override экспортирован ГЛОБАЛЬНО → НИ ОДИН `orc start` не спавнит реальный claude (NO-CLAUDE PASS, окно не жжётся); shift.json получил ЖИВОЙ воркер-PID через tty (Terminal, реальный воркер не обёртка); рестарт с живым → adopt (0 дублей); kill -9 → рестарт → задача пережила (lease, 0 потерь). Лог: docs/evidence/F8/kill-restart.log
 - `python3 -m pytest tests/test_recovery.py` → 11 passed (atomic shift.json, reconcile adopt/lease/idempotent/closed-not-reopened, lease-safety re-resolve/expired, pid_on_window×3, real-pid-via-window). Лог: docs/evidence/F8/unit-tests.log
@@ -128,7 +128,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] реальный гейт: уведомление доставлено (osascript), карточка содержит путь к ТЗ + цену ошибки (G2)
 - [x] после ответа задача продолжает ровно с «Следующего шага» STATE.md
 Проверка: `bash .verify/e2e-gate.sh` + вывод в evidence/F9/
-Статус: self-pass
+Статус: verified
 Доказательство:
 - `bash .verify/e2e-gate.sh` → "F9 GATE PASS (real notification delivered; card has brief path + cost + irreversible; window held; resume ready)", exit 0. R-M2 БЛОКЕР-3 ЗАКРЫТ (было FAIL из-за Ghostty-невыполнения; теперь дефолт Terminal ИСПОЛНЯЕТ seam): РЕАЛЬНЫЙ спавн (Terminal, seam пишет gate STATE.md — экономно, claude не жгу) + РЕАЛЬНОЕ osascript-уведомление (rc=0); газета-карточка: скоуп/планка/полномочия + ПУТЬ К ТЗ (brief.md) + ЦЕНА ОШИБКИ + маркер «необратимое — не в батче»; окно ДЕРЖИТСЯ (3 процесса на tty воркера живы, слот не освобождён); STATE.md.Next → резюм готов. Лог: docs/evidence/F9/e2e-gate.log
 - `python3 -m pytest tests/test_gate.py` → 8 passed (нотификация: композиция/escape/dryrun/unknown-channel; карточка: scope/bar/authority/brief/cost/irreversible; poll-gate: park+notify+keep-window). Лог: docs/evidence/F9/unit-tests.log
@@ -197,7 +197,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] бэкенд-абстракция: spawn/close/pid маршрутизируют; Ghostty opt-in, не дефолт; PID = реальный воркер (tty)
 - [ ] ЦЕЛЬ «0 husk» — НЕ достигнута: husk-окно неустранимо скриптом (среда/профиль/TCC). Существенное (воркер остановлен, RAM свободна) — выполнено; косметика husk — ограничение среды, вынесено пользователю (профиль Terminal «Close if shell exited cleanly» или рабочий Ghostty-билд — P2)
 Проверка: `bash .verify/e2e-loop-close.sh` (дефолт) + `python3 -m pytest tests/test_ghostty.py`
-Статус: self-pass (с честной оговоркой: 0-husk не достигнут — ограничение среды)
+Статус: verified (с честной оговоркой: 0-husk не достигнут — ограничение среды)
 Доказательство:
 - СПАЙК `.spikes/probe/ghostty-exec.md`: Ghostty 1.3.1 `-e` не исполняет команду (12 вариантов A-M, все NOT EXECUTED; ни один tty/child-shell не появляется). → ОТКАТ дефолта на Terminal.
 - `bash .verify/e2e-loop-close.sh` → PASS exit 0 НА ДЕФОЛТНОМ бэкенде (Terminal исполняет seam, петля F14 замыкается, воркер остановлен) — регресс M1 (БЛОКЕР-2) закрыт. Лог: docs/evidence/F14/e2e-loop-close.log
