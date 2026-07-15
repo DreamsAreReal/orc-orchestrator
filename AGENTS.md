@@ -8,8 +8,7 @@ autonomously on macOS. Read this first, then [ARCHITECTURE.md](ARCHITECTURE.md).
 - **What it is / how to use**: [README.md](README.md), [USAGE-RU.md](USAGE-RU.md) (RU).
 - **Why it's built this way**: [ARCHITECTURE.md](ARCHITECTURE.md) — the "Key decisions" section
   explains the reasoning behind every non-obvious choice, plus a full code map.
-- **Code**: [`src/orc/`](src/orc/) — see the code map in ARCHITECTURE.md. Tests in `tests/`,
-  deterministic E2E in `.verify/`.
+- **Code**: [`src/orc/`](src/orc/) — see the code map in ARCHITECTURE.md. Tests in `tests/`.
 
 ## Run the tests
 
@@ -38,4 +37,4 @@ quota — the real spawn/kill/window path is exercised, only the in-terminal pro
   in **Russian** (this is intentional — see `strings.py`, `RU_*`).
 - Style: python3.9-compatible (no `match`, no 3.10+ typing), stdlib only.
 - Every "it works" claim needs a real command→output as proof.
-- Changing behaviour → add a regression test in `tests/` and, for E2E, a `.verify/` script.
+- Changing behaviour → add a regression test in `tests/`.

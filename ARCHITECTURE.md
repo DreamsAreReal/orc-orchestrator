@@ -106,7 +106,6 @@ system python 3.9.6, so config is JSON, not TOML. bash is used only for thin wra
 
 ## Tests
 
-`python3 -m pytest tests/ -q` → 281 tests, zero external deps. Deterministic E2E scripts in
-`.verify/` (the security walls, loop-close, gate, scale-shift) use a seam
-(`ORC_SPAWN_CMD_OVERRIDE`) to drive worker output without burning live Claude quota; the
-spawn/window/tty/kill path stays 100% real.
+`python3 -m pytest tests/ -q` → 281 tests, python3-stdlib only, zero external deps. The
+worker-spawn seam `ORC_SPAWN_CMD_OVERRIDE` lets tests drive worker output deterministically
+without burning live Claude quota (the spawn/window/tty/kill path stays real).
