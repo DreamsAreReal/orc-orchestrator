@@ -119,6 +119,9 @@ def test_worker_pid_routes_to_ghostty(monkeypatch):
     assert spawn.worker_pid({"terminal": "ghostty"}, "/p", "t1") == 9090
 
 
-def test_ghostty_is_the_config_default():
-    # F15: the shipped default backend is ghostty (clean window close)
-    assert config.DEFAULTS["terminal"] == "ghostty"
+def test_terminal_is_the_config_default():
+    # R-M2 fix: the shipped default backend is Terminal.app because it reliably EXECUTES
+    # the worker command. Ghostty 1.3.1 opens an empty window (`-e` never spawns the shell,
+    # proven in .spikes/probe/ghostty-exec.md), so it must NOT be the default -- a default
+    # that opens empty windows is worse than the husk it tried to fix. Ghostty stays opt-in.
+    assert config.DEFAULTS["terminal"] == "terminal"

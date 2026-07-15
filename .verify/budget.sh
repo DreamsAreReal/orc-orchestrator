@@ -27,27 +27,33 @@ FAILS=0
 log "--- per-task spend = live ccusage total delta (claim -> close) ---"
 LIVE="$(PYTHONPATH="$PYSRC" python3 - <<'PY'
 from orc import probes, dispatcher
-# Read the REAL live ccusage total now; this is the value the dispatcher captures at claim.
+# HONEST SCOPE (R-M2): this proves the ATTRIBUTION FORMULA (task_spend = ccusage total
+# delta between claim and close) against a REAL live ccusage reading + its monotonicity.
+# It does NOT drive a real claude to measure a work-produced delta -- that costs the usage
+# window and is deferred to the F12 end-to-end shift. So: (a) read the REAL ccusage total
+# (the value the dispatcher captures at claim); (b) confirm task_spend computes an exact
+# delta for a known close-time total; (c) re-read the REAL ccusage to confirm it only grows
+# (spend can never be negative). The full work-driven delta is an F12 acceptance item.
 before = probes.total_tokens_now()
 if before is None:
     print("SPEND_SKIP: ccusage unavailable")
     raise SystemExit(0)
-# Simulate the worker consuming a known amount, then read again. To keep this deterministic
-# and window-cheap we model the close-time total as before + a known increment and confirm
-# task_spend reports exactly that increment (the arithmetic the live run relies on), AND we
-# re-read the real ccusage total to show it only ever grows (never negative spend).
 worker = {"tokens_before": before}
-spent = dispatcher.task_spend(worker, tokens_now=before + 12345)
+INC = 12345  # a synthetic close-time increment to check the delta formula (NOT a measurement)
+spent = dispatcher.task_spend(worker, tokens_now=before + INC)
 after_real = probes.total_tokens_now()
-print("live ccusage total at claim : %s" % before)
-print("close-time total (claim+12345): %s" % (before + 12345))
-print("attributed task spend        : %s (expected 12345)" % spent)
-print("real ccusage total re-read   : %s (monotonic, spend never negative)" % after_real)
-ok = (spent == 12345) and (after_real is None or after_real >= 0)
-# also confirm the real delta over the short interval is non-negative (monotonic window)
+print("live ccusage total at claim   : %s (REAL reading)" % before)
+print("synthetic close-time total    : %s (claim + %d, for the formula check only)"
+      % (before + INC, INC))
+print("attributed spend (formula)    : %s (expected %d)" % (spent, INC))
+print("real ccusage total re-read    : %s (REAL, monotonic)" % after_real)
+ok = (spent == INC) and (after_real is None or after_real >= 0)
 if before is not None and after_real is not None:
-    print("real short-interval delta    : %s (>= 0 expected)" % (after_real - before))
+    print("real short-interval delta     : %s (>= 0 -> spend never negative)"
+          % (after_real - before))
     ok = ok and (after_real - before) >= 0
+print("NOTE: a WORK-DRIVEN real delta (claude actually consuming) is an F12 item; here we")
+print("      prove the formula against real ccusage + monotonicity, without burning tokens.")
 print("SPEND_OK" if ok else "SPEND_FAIL")
 PY
 )"
@@ -111,7 +117,7 @@ log ""
 
 log "=== RESULT ==="
 if [ "$FAILS" -eq 0 ]; then
-  log "F6 BUDGET PASS (live spend delta + low-cap park + newspaper DONE/WAVE/BETA + summary-first)."
+  log "F6 BUDGET PASS (spend-attribution formula vs REAL ccusage + monotonicity; low-cap park; newspaper DONE/WAVE/BETA; summary-first). Work-driven delta deferred to F12."
   exit 0
 else
   log "F6 BUDGET FAIL: $FAILS check(s)."

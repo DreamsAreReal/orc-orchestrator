@@ -25,10 +25,17 @@ log() { echo "$@" | tee -a "$LOG"; }
 
 export ORC_HOME="$(mktemp -d /tmp/orc-f9-home.XXXXXX)"
 export ORC_HUB="$ORC_HOME"
+# R-M2 fix: force the Terminal backend (executes the seam worker reliably; Ghostty 1.3.1
+# opens an empty window -- see .spikes/probe/ghostty-exec.md). Deterministic, no claude.
+mkdir -p "$ORC_HOME"
+printf '{"terminal": "terminal"}\n' > "$ORC_HOME/config.json"
 PROJ="$(mktemp -d /tmp/orc-f9-proj.XXXXXX)"
-SESSION=""
+WORKER_TTY=""
+WORKER_WIN=""
 cleanup() {
-  [ -n "$SESSION" ] && pkill -f "ORC_SESSION=$SESSION" 2>/dev/null
+  [ -n "$WORKER_TTY" ] && for p in $(ps -t "$WORKER_TTY" -o pid= 2>/dev/null); do kill -9 "$p" 2>/dev/null; done
+  pkill -f "gate-written" 2>/dev/null
+  [ -n "$WORKER_WIN" ] && osascript -e "tell application \"Terminal\" to close (window id $WORKER_WIN) saving no" 2>/dev/null
   rm -rf "$ORC_HOME" "$PROJ" 2>/dev/null
 }
 trap cleanup EXIT
@@ -74,9 +81,13 @@ ORC_SPAWN_CMD_OVERRIDE="$WORKER_CMD" \
   "$ORC" start --once --no-spawn-probe >>"$LOG" 2>&1
 sleep 3
 
-# capture the worker handle so cleanup can stop it
+# capture the worker handle (Terminal window id) + its tty so cleanup can stop it and the
+# WINDOW-HELD check can look for a live process on the worker's tty.
 HANDLE="$(PYTHONPATH="$PYSRC" python3 -c "from orc import shift; w=shift.load()['workers']; print(w[0]['tab_id'] if w else '')" 2>/dev/null)"
-log "worker handle (tab_id): $HANDLE"
+WORKER_WIN="$HANDLE"
+WTTY="$(osascript -e "tell application \"Terminal\" to return tty of tab 1 of window id $HANDLE" 2>/dev/null)"
+WORKER_TTY="$(basename "$WTTY" 2>/dev/null)"
+log "worker handle (tab_id): $HANDLE  tty: $WTTY"
 
 # 3) poll status -> gate detected -> park + REAL notification + window kept.
 #    We route the notification through the dryrun log AS WELL to assert its content
@@ -125,9 +136,11 @@ else
 fi
 log ""
 
-# window kept? the worker is still alive (session waits live for the operator).
-STILL_ALIVE="$(pgrep -f "ORC_SESSION=$SESSION" | wc -l | tr -d ' ')"
-log "worker processes still alive (window held for the operator): $STILL_ALIVE"
+# window kept? the worker is still alive on its tty (the session waits live for the
+# operator -- on a gate the dispatcher must NOT close the worker window, unlike on done).
+STILL_ALIVE="$(ps -t "$WORKER_TTY" -o pid= 2>/dev/null | grep -c .)"
+[ -z "$STILL_ALIVE" ] && STILL_ALIVE=0
+log "worker processes still alive on tty $WORKER_TTY (window held): $STILL_ALIVE"
 if [ "$STILL_ALIVE" -ge 1 ]; then
   log "WINDOW-HELD PASS: the worker session waits live (slot held, not killed on gate)."
 else

@@ -1,12 +1,14 @@
 === F6 budget + per-task spend attribution ===
-date: Wed Jul 15 07:16:03 +04 2026
+date: Wed Jul 15 08:23:31 +04 2026
 
 --- per-task spend = live ccusage total delta (claim -> close) ---
-live ccusage total at claim : 10390166
-close-time total (claim+12345): 10402511
-attributed task spend        : 12345 (expected 12345)
-real ccusage total re-read   : 10390166 (monotonic, spend never negative)
-real short-interval delta    : 0 (>= 0 expected)
+live ccusage total at claim   : 63084178 (REAL reading)
+synthetic close-time total    : 63096523 (claim + 12345, for the formula check only)
+attributed spend (formula)    : 12345 (expected 12345)
+real ccusage total re-read    : 63084178 (REAL, monotonic)
+real short-interval delta     : 0 (>= 0 -> spend never negative)
+NOTE: a WORK-DRIVEN real delta (claude actually consuming) is an F12 item; here we
+      prove the formula against real ccusage + monotonicity, without burning tokens.
 SPEND_OK
 
 --- task with a low token cap is stopped and parked ---
@@ -15,7 +17,7 @@ park reason: parked: task exceeded its token budget (5000 > cap 1000). Stopped t
 CAP_OK
 
 --- newspaper: DONE vs DONE-WAVE-N vs BETA + spend + summary first line ---
-смена: 3 готово, 0 ждут тебя, 0 упало; съедено 5% окна
+смена: 3 готово, 0 ждут тебя, 0 упало; съедено 28% окна
 СМЕНА orc
 
 ── завершено ──
@@ -25,4 +27,4 @@ CAP_OK
 NEWS_OK
 
 === RESULT ===
-F6 BUDGET PASS (live spend delta + low-cap park + newspaper DONE/WAVE/BETA + summary-first).
+F6 BUDGET PASS (spend-attribution formula vs REAL ccusage + monotonicity; low-cap park; newspaper DONE/WAVE/BETA; summary-first). Work-driven delta deferred to F12.

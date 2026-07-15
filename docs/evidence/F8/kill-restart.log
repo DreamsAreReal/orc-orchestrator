@@ -1,43 +1,44 @@
-=== F8 recovery: crash restart + lease + real PID ===
-date: Wed Jul 15 07:29:23 +04 2026
-orc_home: /tmp/orc-f8-home.o85T2A
-project:  /tmp/orc-f8-proj.zBdzfq
+=== F8 recovery: crash restart + lease + real PID (seam only, no claude) ===
+date: Wed Jul 15 08:24:25 +04 2026
+orc_home: /tmp/orc-f8-home.YzFtW7
+project:  /tmp/orc-f8-proj.2etjNK
 
-orc hub initialized at /tmp/orc-f8-home.o85T2A (beads queue ready inside .beads/)
-added task orc-f8-home_o85T2A-s6n -> /tmp/orc-f8-proj.zBdzfq
-task id: orc-f8-home_o85T2A-s6n
+orc hub initialized at /tmp/orc-f8-home.YzFtW7 (beads queue ready inside .beads/)
+added task orc-f8-home_YzFtW7-eie -> /tmp/orc-f8-proj.2etjNK
+task id: orc-f8-home_YzFtW7-eie
 
---- orc start (real Terminal, seam worker = long sleep) ---
+--- orc start (real Terminal, seam worker = long sleep; NO claude) ---
 === canary preflight ===
-[ ok ] bd: bd on PATH, queue at /tmp/orc-f8-home.o85T2A/.beads
+[ ok ] bd: bd on PATH, queue at /tmp/orc-f8-home.YzFtW7/.beads
 [ ok ] auth: loggedIn via /opt/homebrew/bin/claude
-[ ok ] ccusage: window active, 271 min remaining
+[ ok ] ccusage: window active, 215 min remaining
 [ ok ] notify: osascript available
-[ ok ] ram: 1705 MB free (>= 400)
+[ ok ] ram: 1856 MB free (>= 400)
 canary: all preflight checks passed; shift starting
-spawned worker for orc-f8-home_o85T2A-s6n in /tmp/orc-f8-proj.zBdzfq (Terminal window id 4902)
-recorded worker pid: 94296   window: 4902
+spawned worker for orc-f8-home_YzFtW7-eie in /tmp/orc-f8-proj.2etjNK (Terminal window id 4928)
+recorded worker pid: 18274   windows:  4928
 PID-CAPTURE PASS: shift.json has a REAL, live worker PID (eval pid-None fixed).
+NO-CLAUDE PASS: only the seam sleep runs; no real claude spawned (window preserved).
 
 --- restart #1 with worker alive: reconcile must ADOPT (no duplicate) ---
 === canary preflight ===
-[ ok ] bd: bd on PATH, queue at /tmp/orc-f8-home.o85T2A/.beads
+[ ok ] bd: bd on PATH, queue at /tmp/orc-f8-home.YzFtW7/.beads
 [ ok ] auth: loggedIn via /opt/homebrew/bin/claude
-[ ok ] ccusage: window active, 270 min remaining
+[ ok ] ccusage: window active, 215 min remaining
 [ ok ] notify: osascript available
-[ ok ] ram: 1618 MB free (>= 400)
+[ ok ] ram: 1891 MB free (>= 400)
 canary: all preflight checks passed; shift starting
 no ready tasks in the queue; nothing to start
 workers before=1 after-restart=1 ; ready=0
 ADOPT PASS: live worker adopted, task NOT re-served (0 duplicates).
 
---- kill -9 worker (crash), then restart: lease returns task to ready ---
+--- kill -9 worker (crash), then restart: lease returns task (seam re-spawn) ---
 === canary preflight ===
-[ ok ] bd: bd on PATH, queue at /tmp/orc-f8-home.o85T2A/.beads
+[ ok ] bd: bd on PATH, queue at /tmp/orc-f8-home.YzFtW7/.beads
 [ ok ] auth: loggedIn via /opt/homebrew/bin/claude
-[ ok ] ccusage: window active, 270 min remaining
+[ ok ] ccusage: window active, 215 min remaining
 [ ok ] notify: osascript available
-[ ok ] ram: 1613 MB free (>= 400)
+[ ok ] ram: 1879 MB free (>= 400)
 canary: all preflight checks passed; shift starting
 no ready tasks in the queue; nothing to start
 OK
@@ -45,4 +46,4 @@ ready=0 workers=1
 LEASE PASS: task survived the crash (back to ready or re-served) -- 0 losses.
 
 === RESULT ===
-F8 RECOVERY PASS (real PID captured; live worker adopted; crash -> lease, 0 loss/dup).
+F8 RECOVERY PASS (real PID; live worker adopted; crash -> lease; seam-only, no claude).

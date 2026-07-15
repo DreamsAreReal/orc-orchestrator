@@ -45,8 +45,11 @@ DEFAULTS = {
     "task_token_cap": 0,           # 0 = unlimited (F6 overrides)
     "shift_token_cap": 0,          # 0 = unlimited (F6)
     "notify": "macos",             # notification channel (F9)
-    "terminal": "ghostty",         # F15: spawn backend -- ghostty (closes windows cleanly,
-                                   #      the user's terminal) or terminal (Terminal.app)
+    # F15 / R-M2 fix: the DEFAULT backend is Terminal.app because it reliably EXECUTES the
+    # worker command. Ghostty 1.3.1 on this machine opens an EMPTY window (`-e` never spawns
+    # the shell -- proven exhaustively in .spikes/probe/ghostty-exec.md), so it must NOT be
+    # the default. Ghostty stays an opt-in backend for a future build where `-e` works.
+    "terminal": "terminal",
 }
 
 

@@ -1,13 +1,13 @@
 === F15 clean window close (Ghostty) ===
-date: Wed Jul 15 07:39:26 +04 2026
-session marker: ORC_SESSION=orc-f15-98616-3771
-project: /tmp/orc-f15-proj.hfkC8E
+date: Wed Jul 15 07:56:26 +04 2026
+session marker: ORC_SESSION=orc-f15-6908-25780
+project: /tmp/orc-f15-proj.T05BJt
 
 ghostty available: True
 
 --- spawn real Ghostty worker (seam: long sleep, no claude) ---
-ok=True handle=ORC_SESSION=orc-f15-98616-3771
-worker pids (by session marker): 98643 98656 98658 
+ok=True handle=ORC_SESSION=orc-f15-6908-25780
+worker pids (by session marker): 6934 6944 6945 
 SPAWN PASS: a live Ghostty worker is running under the session marker.
 
 --- stop worker via close_ghostty -> window must self-close (0 husk) ---

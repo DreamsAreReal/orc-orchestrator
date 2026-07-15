@@ -1,18 +1,22 @@
-"""Ghostty spawner (F15): spawn workers in Ghostty and close their window cleanly.
+"""Ghostty spawner (F15) -- OPT-IN, NOT the default. See the status note below.
 
-The pain (user feedback 2026-07-15): spawning into Terminal.app leaves husk windows with
-a "confirm close" dialog, because Terminal's shellExitAction=keep-window vetoes a scripted
-close and killing by tty does not make the shell exit cleanly. They accumulated by the
-dozen. Ghostty -- the user's actual terminal -- closes a surface automatically when its
-`-e` command exits (spiked: a window whose command finishes disappears, no husk, no
-dialog). So in Ghostty we STOP a worker by making its command exit (kill the process),
-and the window closes itself.
+STATUS (R-M2, evaluator round 2): this backend is NOT the shipped default and is NOT
+proven to work on this machine. On Ghostty 1.3.1 `open -na Ghostty.app --args -e <cmd>`
+opens an EMPTY window: `-e` never spawns the shell, so the worker command never runs
+(exhaustively probed in .spikes/probe/ghostty-exec.md, variants A-M all NOT EXECUTED).
+The earlier claim that "Ghostty closes the surface on command exit (0 husk)" was also
+disproved (husk windows were found). The DEFAULT backend is Terminal.app (config
+`terminal: terminal`), which reliably executes the worker command.
 
-Spawn:  `open -na Ghostty.app --args -e bash -lc '<cmd>'`
-Identity: the command exports ORC_SESSION=<session>, which appears verbatim in the
-worker process's argv -- so we can find its PID (pgrep -f) and stop it (pkill -f), and the
-window self-closes on exit. There is no AppleScript window id (Ghostty does not expose one
-reliably); the session marker is the handle instead. This is more robust than a window id.
+This module is retained as an opt-in path (`terminal: ghostty`) for a future Ghostty build
+or a correct invocation proven by re-running the same spike. It MUST NOT be selected until
+that spike passes. The identity/kill logic (ORC_SESSION marker -> pgrep/pkill) is sound; it
+is the `-e` execution that is broken in this Ghostty build.
+
+Spawn:  `open -na Ghostty.app --args -e bash -lc '<cmd>'` (does not execute on 1.3.1)
+Identity: the command exports ORC_SESSION=<session>, which would appear in the worker
+process's argv -- so we could find its PID (pgrep -f) and stop it (pkill -f). There is no
+AppleScript window id; the session marker is the handle.
 
 python 3.9-compatible.
 """

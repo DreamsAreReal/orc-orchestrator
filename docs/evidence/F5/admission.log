@@ -1,5 +1,5 @@
 === F5 admission + back-pressure ===
-date: Wed Jul 15 07:49:48 +04 2026
+date: Wed Jul 15 07:53:44 +04 2026
 
 --- limit-string classification on real CLI fixtures ---
   [PASS] limit-session.txt    -> session/park/reset=3:45pm
