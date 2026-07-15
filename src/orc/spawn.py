@@ -120,14 +120,48 @@ def build_start_command(project, claude_bin, prompt, session=None, cfg=None):
     if override:
         inner = "%scd %s && %s" % (prefix, shlex.quote(project), override)
     else:
-        # cd into the project, then launch interactive claude with the start prompt.
-        inner = "%scd %s && %s %s" % (
+        # P0 (multiline-prompt spawn bug): a real worker prompt is MULTILINE and contains
+        # apostrophes / backticks / quotes (e.g. a gate task carrying STATE.md content). We
+        # must NOT inline it into the shell/AppleScript command: a literal newline inside the
+        # osascript `do script "..."` argument breaks the AppleScript parse and leaves the
+        # shell hanging at a `quote>` continuation, so claude never launches and the window
+        # sits empty (single-line prompts happened to work; multiline/gate ones did not).
+        #
+        # Fix: write the prompt to a file in the workspace's .orc/ scratch (writable under
+        # the sandbox, gitignored, orc-managed so it never dirties the tree) and read it back
+        # with `"$(cat <file>)"`. The launch command is now a SINGLE line regardless of the
+        # prompt's content, and the prompt round-trips byte-exact (command substitution in
+        # double quotes preserves embedded newlines; only trailing newlines are trimmed).
+        prompt_file = _write_prompt_file(project, session, prompt)
+        inner = '%scd %s && %s "$(cat %s)"' % (
             prefix,
             shlex.quote(project),
             shlex.quote(claude_bin),
-            shlex.quote(prompt),
+            shlex.quote(prompt_file),
         )
     return _maybe_sandbox(cfg, project, inner)
+
+
+def _prompt_file_path(project, session):
+    """Path to a worker's prompt file inside the workspace .orc/ scratch (orc-managed)."""
+    tag = str(session or "worker")
+    safe = "".join(c if (c.isalnum() or c in "-_") else "_" for c in tag)[:64]
+    return os.path.join(os.path.realpath(project), ".orc", "prompt-%s.txt" % safe)
+
+
+def _write_prompt_file(project, session, prompt):
+    """Write the worker prompt to <project>/.orc/prompt-<session>.txt. Returns the path.
+
+    The .orc/ dir is inside the sole sandbox-writable subpath and is orc-managed (gitignored
+    + in the preflight/external-progress OURS-prefixes), so a prompt file never dirties the
+    operator's tree nor counts as a worker deliverable. Written atomically."""
+    path = _prompt_file_path(project, session)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(prompt if prompt is not None else "")
+    os.replace(tmp, path)
+    return path
 
 
 def _maybe_sandbox(cfg, project, inner):

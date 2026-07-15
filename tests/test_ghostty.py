@@ -15,11 +15,16 @@ from orc import spawn_ghostty, spawn, config  # noqa: E402
 # --------------------------------------------------------------------------- #
 # inner command carries the session marker (the find/kill handle)
 # --------------------------------------------------------------------------- #
-def test_inner_command_exports_session_marker():
-    cmd = spawn_ghostty.build_inner_command("/proj", "/bin/claude", "do it", "task-9")
+def test_inner_command_exports_session_marker(tmp_path):
+    proj = str(tmp_path)
+    # non-override path now writes the prompt to <project>/.orc/ and reads it back, so it
+    # needs a writable project dir (P0 multiline-prompt fix -- never inline the prompt).
+    cmd = spawn_ghostty.build_inner_command(proj, "/bin/claude", "do it", "task-9")
     assert "ORC_SESSION=task-9" in cmd
-    assert "cd /proj" in cmd
+    assert "cd %s" % proj in cmd
     assert "/bin/claude" in cmd
+    assert "cat" in cmd and ".orc/prompt-task-9.txt" in cmd   # prompt read from a file
+    assert "\n" not in cmd                                    # single-line launch command
 
 
 def test_inner_command_seam_override(monkeypatch):

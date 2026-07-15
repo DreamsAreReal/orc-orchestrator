@@ -248,6 +248,10 @@ North Star: утром накидал ~10 задач по проектам — M
 ### ФИКС-ВОЛНА цикл 1 (фаза 5 verify — P0: блокеры + профминимум-безопасность + полнота)
 Из вердиктов R-final-{E1,E2,E3}. Каждый — фикс + регресс-тест зелёный (evidence в docs/evidence/fix1/).
 БЛОКЕРЫ:
+- [x] **B0 многострочный промпт ломал спавн** (spawn.build_start_command + ghostty; найден пользователем на живом окне): промпт инлайнился в shell/AppleScript; литеральный перенос строки в `do script "..."` рвал AppleScript-парс → shell висел на `quote>`, claude НЕ запускался (однострочные работали, ГЕЙТОВЫЕ/многострочные — нет). Фикс: промпт пишется в `<project>/.orc/prompt-<session>.txt` (sandbox-writable, gitignored, orc-managed) и читается `claude "$(cat <файл>)"` → команда запуска ОДНОСТРОЧНАЯ независимо от контента, промпт байт-в-байт. Статус: self-pass
+  - `bash .verify/e3/e3-multiline-prompt.sh` → exit 0 (sandbox on/off): многострочный промпт (апострофы/бэктики/кавычки/переносы) round-trips байт-в-байт через printf-seam, 0 continuation. Лог: docs/evidence/fix1/P0ml-multiline-prompt-regress.log
+  - `bash .verify/e2e-gate.sh` → PASS (реальный гейт, ранее ломавший shell). Лог: docs/evidence/fix1/P0ml-e2e-gate.log
+  - unit: test_multiline_prompt_round_trips_via_file, test_prompt_file_lives_in_orc_managed_scratch, test_ghostty inner-command.
 - [x] **B1 reward-hacking** (dispatcher.poll_completions): DONE засчитывается ТОЛЬКО при внешнем факте (git-коммит после старта воркера ИЛИ изменённый/созданный артефакт); нет факта → park «suspected-fake-done», bd blocked. `watchdog.external_progress` подключён к completion + фильтр расширен (orc-managed .claude/.orc/docs/tasks — не деливерабл). Статус: self-pass
   - `bash .verify/e3/e3-rewardhack-live.sh` → exit 0: фейк-DONE ПАРКУЕТСЯ (bd blocked, HEAD unchanged), control (реальный коммит) закрывается. Лог: docs/evidence/fix1/B1-rewardhack-regress.log
   - unit: test_poll_done_without_external_fact_is_parked (+ 2 loop-close обновлены под реальный деливерабл, не ослабление).
@@ -263,7 +267,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] **P7 start --json цельный** (cmd_start): человекочит.→stderr, stdout=только валидный JSON (json.tool парсит). docs/evidence/fix1/P6-P7-canary-notify-json.log.
 - [x] **P8 newspaper деградирует** (report._gate_card): try/except BeadsError → минимальная карточка+пометка, не краш. docs/evidence/fix1/P8-newspaper-degrade.log. unit: 2.
 - [x] **P9 .env в .gitignore** (.env/.env.*/!.env.example). docs/evidence/fix1/P9-gitignore-env.log.
-Итог фикс-волны: 210 → **224 теста** (+14), 0 регрессий. Смоук после: pytest 224, e2e-loop-close PASS, sandbox-walls PASS, push-wall PASS. P1-волна (loop-детект чередование, живой pipeline-прогон, сеть-эксфильтрация) — НЕ в этом цикле.
+Итог фикс-волны: 210 → **226 тестов** (+16), 0 регрессий. Смоук после: pytest 226, e2e-loop-close PASS, e2e-gate PASS, sandbox-walls PASS, push-wall PASS, e3-multiline-prompt PASS. P1-волна (loop-детект чередование, живой pipeline-прогон, сеть-эксфильтрация) — НЕ в этом цикле.
 
 ---
 Майлстоуны: M1 = F1-F4 ✓verified + F14 (замыкание петли, из consumer), M2 = F5-F9 + F15 (надёжность + гейт + бэкенд-абстракция), M3 = F10 + F13 (ops + OS-sandbox), M4 = F11-F12 (патчи конвейера + E2E).

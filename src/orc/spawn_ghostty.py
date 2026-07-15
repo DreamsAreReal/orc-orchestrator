@@ -54,16 +54,23 @@ def build_inner_command(project, claude_bin, prompt, session, cfg=None):
     as the Terminal backend.
     """
     from . import worker_walls as _ww
-    # G0c: same git-push credential strip as the Terminal backend (defense-in-depth).
-    export = _ww.push_neutralizing_export_prefix()
+    from . import spawn as _spawn
+    # P3: strip secret env vars (same as the Terminal backend) so prod creds are unreachable.
+    denylist = _ww.secret_denylist((cfg or {}).get("secret_denylist_extra"))
+    export = _ww.unset_secrets_export_prefix(denylist=denylist)
+    # G0c + B2: same git-push (HTTPS + SSH) credential strip as the Terminal backend.
+    export += _ww.push_neutralizing_export_prefix()
     export += "export ORC_SESSION=%s; " % shlex.quote(str(session))
     override = os.environ.get("ORC_SPAWN_CMD_OVERRIDE")
     if override:
         inner = "%scd %s && %s" % (export, shlex.quote(project), override)
     else:
-        inner = "%scd %s && exec %s %s" % (
-            export, shlex.quote(project), shlex.quote(claude_bin), shlex.quote(prompt))
-    from . import spawn as _spawn
+        # P0 multiline-prompt fix: read the prompt from a file (never inline it in the shell
+        # command) so newlines/apostrophes/quotes in a real (gate) prompt cannot break the
+        # `-e bash -lc '...'` quoting. Same mechanism as the Terminal backend.
+        prompt_file = _spawn._write_prompt_file(project, session, prompt)
+        inner = '%scd %s && exec %s "$(cat %s)"' % (
+            export, shlex.quote(project), shlex.quote(claude_bin), shlex.quote(prompt_file))
     return _spawn._maybe_sandbox(cfg, project, inner)
 
 

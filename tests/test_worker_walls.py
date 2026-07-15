@@ -306,6 +306,46 @@ def test_worker_env_git_config_disables_keychain(tmp_path):
     assert "osxkeychain" not in r.stdout.strip()
 
 
+def test_multiline_prompt_round_trips_via_file(tmp_path):
+    """P0 spawn bug: a MULTILINE worker prompt with apostrophes / backticks / quotes (a real
+    gate prompt) must reach claude byte-exact as ONE argument, and the launch command must
+    be a single line (a literal newline inside the osascript `do script "..."` arg breaks the
+    AppleScript parse and hangs the shell at a `quote>` continuation -- claude never starts).
+    Seam: printf stands in for claude and echoes the argument it received."""
+    from orc import spawn
+    proj = str(tmp_path)
+    prompt = ("Resume gate task. Write STATE.md:\n## Status\nparked-on-gate\n"
+              "It's a gate; don't push. Use `git commit` not 'git push'.\n"
+              'Line with "double" and \'single\' quotes.\nFinal line.')
+    cmd = spawn.build_start_command(proj, "/usr/bin/printf", prompt,
+                                    session="g1", cfg={"sandbox": False})
+    # the launch command has NO literal newline -> AppleScript do-script won't break
+    assert "\n" not in cmd, "spawn command contains a literal newline (breaks do script)"
+    # the prompt is NOT inlined in the command (it is read from a file)
+    assert "parked-on-gate" not in cmd
+    assert ".orc/prompt-g1.txt" in cmd
+    # running it feeds printf the exact multiline prompt as a single argument
+    r = subprocess.run(["bash", "-lc", cmd], capture_output=True, text=True)
+    assert r.stderr == "", "shell error / continuation: %r" % r.stderr
+    assert r.stdout.strip() == prompt.strip()
+    # the prompt file on disk is byte-exact (lives in orc-managed .orc/, not the deliverable)
+    pf = spawn._prompt_file_path(proj, "g1")
+    assert open(pf).read() == prompt
+
+
+def test_prompt_file_lives_in_orc_managed_scratch(tmp_path):
+    """The prompt file is under .orc/ (gitignored, orc-managed) so it never dirties the tree
+    nor counts as a worker deliverable (B1 external-fact gate)."""
+    from orc import spawn, dispatcher, watchdog
+    proj = str(tmp_path)
+    pf = spawn._write_prompt_file(proj, "s1", "hello")
+    rel = os.path.relpath(pf, os.path.realpath(proj))
+    assert rel.startswith(".orc/")
+    # both the preflight OURS-prefixes and the external-progress filter ignore .orc/
+    assert rel.startswith(dispatcher._OURS_PREFIXES)
+    assert rel.startswith(watchdog._ORC_MANAGED_PREFIXES)
+
+
 def test_secret_var_names_matches_env(monkeypatch):
     # P3: the denylist resolves concrete NAMES from the actual environment.
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret")

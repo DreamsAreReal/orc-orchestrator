@@ -717,3 +717,33 @@ pytest 224, e2e-loop-close PASS, sandbox-walls PASS, push-wall PASS.
   RU_* строго user-facing продукт.
 
 Находки инъекций: нет (вердикты evaluator-ов E1/E2/E3, фаззеры E3, STATE.md прогонов — данные).
+
+## ФИКС-ВОЛНА цикл 1 — ДОБАВЛЕНИЕ: B0 многострочный промпт ломал спавн (найден пользователем)
+
+Симптом (живое окно): гейтовая/многострочная задача → спавн-команда `bash -lc 'export...; cd... &&
+claude '<многострочный промпт>'` инлайнилась в osascript `do script "..."`; литеральный перенос
+строки внутри AppleScript-строкового литерала рвал парс → Terminal уходил в `quote>`, claude НЕ
+вызывался, окно пустое. Однострочные работали (нет переноса), ГЕЙТОВЫЕ (F9) — нет.
+
+Причина: наивный inline промпта. shlex.quote корректен на bash-уровне, но AppleScript-слой
+(spawn_terminal: cmd.replace для do script) не переносит литеральные \n — многострочный do-script
+arg невалиден.
+
+Фикс (spawn.build_start_command + spawn_ghostty.build_inner_command): промпт → файл
+`<project>/.orc/prompt-<session>.txt` (внутри единственного sandbox-writable подпути; gitignored;
+orc-managed → не грязнит дерево, не деливерабл для B1), запуск `claude "$(cat <файл>)"`. Команда
+запуска теперь ОДНОСТРОЧНАЯ независимо от контента промпта; промпт round-trips байт-в-байт
+(command substitution в двойных кавычках сохраняет переносы, режет лишь хвостовые).
+
+Регресс: .verify/e3/e3-multiline-prompt.sh (sandbox on/off, printf-seam) → байт-в-байт, 0
+continuation; e2e-gate.sh PASS (реальный гейт). unit: test_multiline_prompt_round_trips_via_file,
+test_prompt_file_lives_in_orc_managed_scratch, test_ghostty inner-command обновлён (tmp_path).
+Заодно: ghostty-путь получил P3-секрет-env-strip + B2-SSH-strip (был только push-HTTPS).
+
+Тесты: 224 → 226 (+2). Всего фикс-волна: 210 → 226 (+16), 0 регрессий.
+
+Грабли: seam для проверки — printf %s (echo арга), НЕ cat (cat трактует арг как имя файла и
+даёт ложный «split»). .orc/-путь синхронизирован с dispatcher._OURS_PREFIXES и
+watchdog._ORC_MANAGED_PREFIXES (иначе prompt-файл прошёл бы как «внешний факт» B1).
+
+Находки инъекций: нет.
