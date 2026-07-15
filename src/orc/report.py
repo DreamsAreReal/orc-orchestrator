@@ -188,6 +188,7 @@ def _gate_card(hub, parked_entry):
     authority = "—"
     cost = "—"
     brief_path = "—"
+    irreversible = ""
     task = beads.show(hub, task_id) if task_id else None
     if task:
         title = task.get("title", task_id)
@@ -197,10 +198,13 @@ def _gate_card(hub, parked_entry):
         bar = gate.get("bar", bar)
         authority = gate.get("authority", authority)
         cost = gate.get("cost", cost)
+        if gate.get("irreversible"):
+            irreversible = S.RU_GATE_IRREVERSIBLE
         slug = meta.get("slug")
         proj = meta.get("project")
         if proj and slug:
             brief_path = "%s/docs/tasks/%s/brief.md" % (proj, slug)
     return S.RU_GATE_CARD.format(
         id=task_id, title=title, scope=scope, bar=bar,
-        authority=authority, cost=cost, brief_path=brief_path)
+        authority=authority, cost=cost, brief_path=brief_path,
+        irreversible=irreversible)

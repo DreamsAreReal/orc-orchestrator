@@ -113,6 +113,8 @@ def test_poll_gate_parks_and_keeps_window(tmp_path, monkeypatch):
     monkeypatch.setattr(dispatcher.spawn, "close_worker",
                         lambda cfg, wid, session=None: closed_win.append(wid) or True)
     monkeypatch.setattr(dispatcher.beads, "set_status", lambda hub, tid, st: True)
+    # F9: the gate branch also fires a notification; stub it here (tested in test_gate.py)
+    monkeypatch.setattr(dispatcher, "_notify_gate", lambda cfg, hub, tid: True)
 
     state = _register(proj, "slug1", "t-1", "5000")
     state, tr = dispatcher.poll_completions(state, "hub")

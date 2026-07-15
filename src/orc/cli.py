@@ -43,7 +43,7 @@ def cmd_init(args):
     return 0
 
 
-def _add_one(hub, project, text, priority, gate=False):
+def _add_one(hub, project, text, priority, gate=False, gate_card=None):
     project = os.path.abspath(os.path.expanduser(project))
     if not text or not text.strip():
         raise ValueError(S.ERR_NO_TASK_TEXT)
@@ -57,6 +57,10 @@ def _add_one(hub, project, text, priority, gate=False):
         meta["product_rev"] = prod_rev
     if gate:
         meta["gate"] = True
+        # F9 gate card: scope / bar / authority / cost of error / irreversible flag. Shown
+        # on the newspaper gate card when the worker reaches the gate and waits live.
+        if gate_card:
+            meta["gate_card"] = {k: v for k, v in gate_card.items() if v is not None}
     issue_id = beads.create(hub, text.strip(), priority=priority, labels=labels, metadata=meta)
     return issue_id, project
 
@@ -97,8 +101,18 @@ def cmd_add(args):
     if not os.path.isdir(os.path.abspath(os.path.expanduser(args.project))):
         print(S.ERR_PROJECT_MISSING.format(project=args.project), file=sys.stderr)
         return 1
+    gate_card = None
+    if args.gate:
+        gate_card = {
+            "scope": getattr(args, "scope", None),
+            "bar": getattr(args, "bar", None),
+            "authority": getattr(args, "authority", None),
+            "cost": getattr(args, "cost", None),
+            "irreversible": True if getattr(args, "irreversible", False) else None,
+        }
     try:
-        issue_id, p = _add_one(hub, args.project, args.text, args.priority, gate=args.gate)
+        issue_id, p = _add_one(hub, args.project, args.text, args.priority,
+                               gate=args.gate, gate_card=gate_card)
     except ValueError as e:
         print(str(e), file=sys.stderr)
         return 1
@@ -234,6 +248,12 @@ def build_parser():
     pa.add_argument("text", nargs="?", help="task text")
     pa.add_argument("-p", "--priority", type=int, default=2, help="priority 0..4 (0=urgent)")
     pa.add_argument("--gate", action="store_true", help="mark as a gate task (needs a human)")
+    pa.add_argument("--scope", help="gate card: what is being decided")
+    pa.add_argument("--bar", help="gate card: the quality bar to check against")
+    pa.add_argument("--authority", help="gate card: what the worker is/ isn't allowed to do")
+    pa.add_argument("--cost", help="gate card: the cost of getting this decision wrong")
+    pa.add_argument("--irreversible", action="store_true",
+                    help="gate card: this decision is irreversible (never batch-approved)")
     pa.add_argument("--batch", action="store_true", help="read 'project: text' lines from stdin")
     pa.add_argument("--json", action="store_true")
     pa.set_defaults(func=cmd_add)

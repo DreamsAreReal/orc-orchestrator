@@ -147,9 +147,25 @@ def poll_completions(state, hub, cfg=None):
             reason = S.PARK_ON_GATE
             _safe_block(hub, task_id)
             shiftmod.mark_parked(state, task_id, reason)
-            # keep the worker window: the session waits live for the operator (F9)
+            # keep the worker window: the session waits live for the operator (F9). Fire a
+            # macOS notification so the operator knows a decision is waiting; the full gate
+            # card (scope/bar/authority/brief/cost) is in the newspaper.
+            _notify_gate(cfg, hub, task_id)
             transitions.append((task_id, "gate"))
     return state, transitions
+
+
+def _notify_gate(cfg, hub, task_id):
+    """Notify the operator that a task reached a gate and is waiting live (F9)."""
+    from . import notify
+    task = beads.show(hub, task_id) if task_id else None
+    title = task.get("title") if task else task_id
+    meta = beads.task_meta(task) if task else {}
+    scope = (meta.get("gate_card") or {}).get("scope", "")
+    try:
+        return notify.notify_gate(cfg, task_id, title, scope)
+    except Exception:
+        return False
 
 
 # --- F6: per-task spend attribution + budget caps ---------------------------- #

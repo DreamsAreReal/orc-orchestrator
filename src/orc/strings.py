@@ -141,5 +141,14 @@ RU_GATE_CARD = (
     "     планка:     {bar}\n"
     "     полномочия: {authority}\n"
     "     цена ошибки: {cost}\n"
-    "     ТЗ: {brief_path}"
+    "     ТЗ: {brief_path}{irreversible}"
 )
+# Appended to a gate card when the decision touches an irreversible action: such gates
+# are NEVER approved as part of a batch (design.md F9) -- the operator answers each alone.
+RU_GATE_IRREVERSIBLE = (
+    "\n     ⚠ необратимое действие — решается ОТДЕЛЬНО, не в батче")
+
+# --- F9 gate notification (ru; user-facing macOS notification) ---
+NOTIFY_GATE_TITLE = "orc: задача ждёт твоего решения"
+NOTIFY_GATE_BODY = "{id} — {title}. Открой газету (`orc status --newspaper`)."
+NOTIFY_GATE_SUBTITLE = "гейт: {scope}"
