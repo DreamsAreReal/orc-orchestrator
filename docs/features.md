@@ -150,7 +150,7 @@ North Star: утром накидал ~10 задач по проектам — M
 - [x] вкладка воркера закрывается после терминального статуса; идентификатор вкладки в shift.json (не None) — NB: «закрывается» реализовано как СТОП воркера (kill по tty, RAM освобождается); удаление пустого husk-окна — best-effort, блокируется Terminal-профилем shellExitAction пользователя (находка среды, косметика)
 - [x] `orc status` при непустой ready-очереди до start показывает задачи; `init --help` непустой; сообщения о хабе единообразны
 Проверка: `bash .verify/e2e-loop-close.sh` (полный: add→start→ждать DONE→газета=готово, автоматически) + вывод в evidence/F14/
-Статус: self-pass
+Статус: verified
 Доказательство:
 - `bash .verify/e2e-loop-close.sh` → "F14 CLOSE-THE-LOOP PASS", exit 0. РЕАЛЬНЫЙ osascript-терминал (window id 4865, tty ttys014); `orc status` ПОЛЛИТ STATE.md → газета «смена: 1 готово» за ~4с БЕЗ ручного ls; воркер остановлен (0 процессов на tty); bd closed. Лог: docs/evidence/F14/e2e-loop-close.log
 - `python3 -m pytest tests/test_loop_close.py` → 15 passed (детектор DONE/DONE-WAVE-N/BETA/gate/in-progress + poll done/gate/bd-error/no-state + запись window id). Лог: docs/evidence/F14/unit-tests.log
