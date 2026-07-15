@@ -33,7 +33,12 @@ DEFAULTS = {
     "claude_bin": "/opt/homebrew/bin/claude",
     "orc_src": None,               # resolved at runtime to this package's src dir
     "min_free_ram_mb": 400,        # admission: refuse spawn below this (8GB machine)
-    "min_window_minutes": 5,       # admission: refuse spawn if window nearly closed
+    # DISPLAY-ONLY (kept for back-compat / status footer). NOT an admission gate anymore:
+    # `remaining_minutes` is the time until the 5-hour block RESETS, not remaining quota, so
+    # a low value means fresh quota is imminent -- parking on it self-blocked the loop with
+    # ~70% quota free (user-found live bug, 2026-07-15). Real back-pressure is the reactive
+    # CLI limit-strings (see admission.classify_limit), never the block-reset clock.
+    "min_window_minutes": 5,       # display-only; not used to park (see note above)
     "max_workers": 1,             # 8GB RAM -> one active worker (research finding)
     "restart_cap": 2,              # watchdog restart cap before escalation (F7)
     "loop_hash_k": 4,              # watchdog: K identical heartbeat hashes in a row = loop (F7)

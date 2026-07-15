@@ -1,12 +1,23 @@
 """Admission + back-pressure (F5): decide whether it is safe to spawn a worker.
 
 The dispatcher must not blindly spawn onto an exhausted usage pool or a memory-starved
-machine. Before every spawn it consults three signals (design.md admission contract):
+machine. Before every spawn it consults these signals (design.md admission contract):
 
     spawn if ready != empty
          and free_ram >= min_free_ram_mb
-         and window_remaining >= min_window_minutes
          and no CLI limit-string is active
+
+CRITICAL back-pressure correctness (fix 2026-07-15, user-found live bug): back-pressure
+reacts to REAL quota exhaustion, NOT to the clock ticking toward a block reset. ccusage's
+`remaining_minutes` is the time until the SCHEDULED reset of the current 5-hour block --
+it is NOT the amount of quota/tokens left. When a block resets a NEW block begins with a
+FRESH quota. So "only 3 minutes left in the block" is the OPPOSITE of a reason to park:
+fresh quota is imminent. The old gate parked on `remaining_minutes < min_window_minutes`
+and self-blocked the loop even with ~70% of the user's quota free (proven live: a shift
+parked "usage window is nearly closed (3 min left < 5 min)"). That gate is REMOVED.
+
+Real exhaustion is signalled by the reactive CLI limit-strings (session/weekly/Opus caps),
+which we still honor below -- those are the correct back-pressure.
 
 Limit-strings are the deterministic text Claude Code prints when a usage cap is hit
 (see the official error reference; fixtures in tests/fixtures/limit-*.txt reflect the
@@ -168,15 +179,23 @@ def admission_check(cfg, free_ram_mb, window, ready_count, limit_text=None, now=
     Signals (design.md admission contract):
       - ready_count == 0        -> nothing to do ("no-ready")
       - free_ram < threshold    -> memory-starved ("low-ram")
-      - window inactive/too low -> pool nearly closed ("window-low")
       - active limit-string     -> back-pressure: park (session/weekly/opus) or the caller
                                     retries (429/529). ("limit-<kind>")
+
+    NOT a spawn blocker (fixed 2026-07-15):
+      - window `remaining_minutes` (time until the 5-hour block resets) is NOT a resource
+        gauge -- a low value means fresh quota is imminent, not that quota is gone. We do
+        NOT park on it. `min_window_minutes` is retained in config only for display.
+      - an inactive/absent ccusage window is treated as "no telemetry", NOT as an
+        exhausted pool: we ADMIT and flag it in meta (meta["window"]="no-telemetry") so
+        the operator sees the gap in the log without the loop blocking itself. Real
+        exhaustion still surfaces reactively through the CLI limit-strings.
 
     A transient 429/529 is NOT a spawn blocker by itself (retry-able), but if a usage cap
     (session/weekly/opus) is active the gate refuses and hands back the reset epoch so the
     dispatcher can park until the pool reopens.
     """
-    meta = {"reset_epoch": None, "limit_kind": None, "reaction": None}
+    meta = {"reset_epoch": None, "limit_kind": None, "reaction": None, "window": None}
 
     if ready_count <= 0:
         return False, "no-ready", meta
@@ -185,12 +204,10 @@ def admission_check(cfg, free_ram_mb, window, ready_count, limit_text=None, now=
     if free_ram_mb is None or free_ram_mb < min_ram:
         return False, "low-ram", meta
 
+    # No window telemetry is NOT an exhausted pool -- admit with a flag (better a logged
+    # spawn than a self-blocked loop). Only real quota caps (limit-strings) park below.
     if not window or not window.get("active"):
-        return False, "window-inactive", meta
-    rem = window.get("remaining_minutes")
-    min_win = cfg.get("min_window_minutes", 5)
-    if rem is None or rem < min_win:
-        return False, "window-low", meta
+        meta["window"] = "no-telemetry"
 
     limit = classify_limit(limit_text, now=now) if limit_text else None
     if limit:

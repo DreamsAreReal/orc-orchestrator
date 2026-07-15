@@ -1,0 +1,50 @@
+=== orc live-demo: real claude worker end-to-end (2026-07-15) ===
+Task: orc-7d7  "Create result.txt containing the word DONE, then stop"
+Project: ~/Desktop/orc-live-demo
+Spawn: REAL claude (ORC_SPAWN_CMD_OVERRIDE unset), Terminal window id 6118
+
+--- admission fix in effect ---
+ccusage active block: remainingMinutes=289, quota FREE (fresh 5-hour block).
+Old (buggy) gate would still have parked here if remainingMinutes had been < 5
+("window-low") regardless of free quota. New gate: no time-window gate at all;
+admit unless a real CLI limit-string is active. Result: ADMIT.
+
+--- canary + spawn (orc start --once) ---
+[ ok ] bd: bd on PATH, queue at /Users/admin/.orc/.beads
+[ ok ] auth: loggedIn via /opt/homebrew/bin/claude
+[ ok ] ccusage: window active, 288 min remaining (fresh block, quota free)
+[ ok ] ram: 2314 MB free (>= 400)
+[ ok ] spawn: osascript terminal spawn ok
+canary: all preflight checks passed; shift starting
+spawned worker for orc-7d7 in ~/Desktop/orc-live-demo (Terminal window id 6118)
+
+--- result.txt (external fact, created by real claude) ---
+DONE
+
+--- docs/tasks/create-result-txt-containing-the-word/STATE.md (loop-close signal) ---
+Status: DONE
+
+--- loop close (dispatcher.poll_completions) ---
+worker_progressed(orc-7d7) = True   (external fact: result.txt present, non-empty)
+transitions = [('orc-7d7', 'done')]
+done = [('orc-7d7', 'done')]
+workers after = []   (worker stopped, RAM freed, window closed)
+
+--- newspaper (газета) ---
+смена: 1 готово, 1 ждут тебя, 0 упало; съедено 4% окна
+СМЕНА orc
+── завершено ──
+  ✓ orc-7d7  готово  ~163336 ток.
+(the "1 ждут тебя" row is a pre-existing parked task orc-w96 from an earlier hub
+ state, unrelated to this demo; the demo task orc-7d7 is under "завершено".)
+
+--- quota spend proof (ccusage totalTokens) ---
+before = 13036679   after = 13362936   delta ~= 326k tokens
+=> real work by real claude, real subscription quota spent (the North Star:
+   "just spend the under-used quota").
+
+--- worker window ---
+Terminal window 6118 self-closed on worker exit. Fresh re-query of Terminal
+windows returns only unrelated pre-existing windows (6104, 6103); 6118 gone.
+Worker claude process dead; RAM freed. (An earlier query showed a stale 6118 id
+from AppleScript's window cache -- cleared on re-query.)

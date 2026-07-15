@@ -71,7 +71,17 @@ North Star: утром накидал ~10 задач по проектам — M
 
 ### F5 — Admission + back-pressure (лимиты/RAM) [M2]
 Ворота: G4, G12. Опыт/ценность: тратить недоиспользуемый пул безопасно.
-Что: перед spawn — `ccusage blocks --active --json` (окно) + free-RAM + детект лимит-строк CLI. session/weekly/Opus → парковка до ресета (парс времени); 429/529 → ретрай без парковки.
+Что: перед spawn — free-RAM-гейт + детект лимит-строк CLI. session/weekly/Opus → парковка до ресета (парс времени); 429/529 → ретрай без парковки.
+
+КРИТ-ФИКС 2026-07-15 (баг найден пользователем на живом shift.json): admission БОЛЬШЕ НЕ
+гейтит по времени окна. Философия: «есть квота → запускай; тратить недоиспользуемый пул».
+Единственный ДОСТОВЕРНЫЙ сигнал исчерпания квоты — реактивная лимит-строка CLI
+(`classify_limit`). `ccusage remaining_minutes` = время до тика 5-часового блока, НЕ остаток
+квоты: после сброса блока начинается СВЕЖАЯ квота, поэтому «осталось <5 мин» — повод
+ЗАПУСКАТЬ, а не паркать. Старый гейт `remaining_minutes < min_window_minutes` («window-low»)
+паркал задачу при ~70% свободной квоты (self-block контура) — ВЫКОШЕН целиком. Гейты
+admission теперь ровно три: ready_count>0, RAM, реальная лимит-строка. `window-inactive` →
+ADMIT с логом (нет телеметрии ≠ нет квоты). `min_window_minutes` — мёртвое поле (display-only).
 Приёмка:
 - [x] фикстуры лимит-строк: session→парковка+время ресета, weekly→глубокая, Opus→деградация, 429→ретрай (100% фикстур) (G4)
 - [x] допуск: ready≠∅ + окно/RAM ok → spawn ≤60 сек; нехватка RAM → не спавнит (G12)
@@ -82,6 +92,8 @@ North Star: утром накидал ~10 задач по проектам — M
 - `python3 -m pytest tests/test_admission.py` → 23 passed (классификация×7, парс ресет-времени×4, гейт RAM/окно/ready/limit×12). Лог: docs/evidence/F5/unit-tests.log
 - интеграция в dispatcher: `python3 -m pytest tests/test_dispatcher.py` → 14 passed (11 F4 + 3 admission: low-ram→park без claim, ram/window ok→spawn, session-limit→park). Лог: docs/evidence/F5/dispatcher-tests.log
 - fixtures: tests/fixtures/limit-{session,weekly,opus,429,529,none}.txt
+- [КРИТ-ФИКС 2026-07-15] `python3 -m pytest tests/test_admission.py` → 28 passed. Новые регрессы бага пользователя: remaining_minutes=3/1/None + нет лимит-строки + RAM ok + ready>0 → ADMIT (не park); window inactive/None → ADMIT + флаг no-telemetry; park ТОЛЬКО по реальной лимит-строке даже при широком окне; near-reset+лимит-строка → всё равно park (истина — лимит-строка, не часы). Убраны 2 старых теста «window-low»/«window-inactive → park».
+- [ЖИВОЙ ПРОГОН реального claude] `orc start --once` (БЕЗ ORC_SPAWN_CMD_OVERRIDE) на ~/Desktop/orc-live-demo: admission ADMIT (окно 288 мин, квота свободна), реальный claude спавнлен (Terminal 6118), создал result.txt=«DONE» + STATE.md=«Status: DONE» за ~6с; poll_completions: worker_progressed=True → bd close → газета «✓ orc-7d7 готово ~163336 ток.»; ccusage totalTokens 13.04M→13.36M (реально потрачено ~326k); окно воркера само закрылось (RAM свободна). Доказательство: docs/evidence/live-demo/
 
 ### F6 — Бюджет-кап + per-задачная атрибуция расхода [M2]
 Ворота: G8, контр-метрика «расход». Опыт/ценность: не сжечь weekly-кап; газета показывает «сколько съела задача».

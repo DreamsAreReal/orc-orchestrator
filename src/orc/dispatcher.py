@@ -356,8 +356,13 @@ def admit(cfg, ready_count, limit_text=None, now=None):
     window = probes.ccusage_window()
     if limit_text is None:
         limit_text = _limit_text()
-    return admission.admission_check(
+    ok, reason, meta = admission.admission_check(
         cfg, free_ram, window, ready_count, limit_text=limit_text, now=now)
+    # No window telemetry is admitted (not parked) but logged so the operator sees the gap.
+    if meta.get("window") == "no-telemetry":
+        import sys as _sys
+        _sys.stderr.write(S.WINDOW_NO_TELEMETRY + "\n")
+    return ok, reason, meta
 
 
 def _park_reason_for_admission(cfg, reason, meta):
@@ -365,10 +370,9 @@ def _park_reason_for_admission(cfg, reason, meta):
     if reason == "low-ram":
         return S.PARK_LOW_RAM.format(ram=probes.free_ram_mb(),
                                      min=cfg.get("min_free_ram_mb", 400))
-    if reason in ("window-low", "window-inactive"):
-        w = probes.ccusage_window() or {}
-        return S.PARK_WINDOW_LOW.format(rem=w.get("remaining_minutes"),
-                                        min=cfg.get("min_window_minutes", 5))
+    # NB: there is no longer a "window-low"/"window-inactive" park reason. Admission does
+    # NOT park on the block-reset clock (fixed 2026-07-15); an absent window telemetry is
+    # admitted-with-a-flag, not parked. Real back-pressure is the limit-string reasons.
     if reason == "limit-session":
         return S.PARK_LIMIT_SESSION.format(reset=_reset_str(meta))
     if reason == "limit-weekly":

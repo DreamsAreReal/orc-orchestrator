@@ -50,6 +50,11 @@ ERR_BD_MISSING = "error: `bd` (beads) not found on PATH; install with `brew inst
 HUB_INITIALIZED = "orc hub initialized at {hub} (beads queue ready inside .beads/)"
 HUB_ALREADY = "orc hub already initialized at {hub}"
 
+NEW_SHIFT_DONE = "orc new-shift: cleared previous shift state; the ready queue is visible again."
+NEW_SHIFT_WORKERS_LIVE = (
+    "error: workers are still live; run `orc stop` first so their tasks return to ready "
+    "before clearing the shift.")
+
 START_CANARY_OK = "canary: all preflight checks passed; shift starting"
 START_CANARY_FAIL = "canary: FAILED ({n} check(s)); shift not started"
 START_NO_READY = "no ready tasks in the queue; nothing to start"
@@ -96,9 +101,16 @@ PARK_LOW_RAM = (
     "parked: not enough free RAM to spawn a worker safely "
     "({ram} MB free < {min} MB). Waiting for memory to free up."
 )
-PARK_WINDOW_LOW = (
-    "parked: the usage window is nearly closed ({rem} min left < {min} min). "
-    "Waiting for the next 5-hour block."
+# REMOVED as a park reason (2026-07-15, user-found live bug): orc used to park a task
+# when the 5-hour block was about to reset ("window is nearly closed, N min left"). That
+# was WRONG -- `remaining_minutes` is the time until the block RESETS, not remaining quota,
+# so a low value means fresh quota is imminent, not exhausted. It self-blocked the loop
+# with ~70% quota free. Back-pressure now reacts only to real CLI limit-strings. This
+# string is repurposed as a benign LOG note when ccusage returns no window telemetry (we
+# ADMIT anyway -- no telemetry is not an exhausted pool).
+WINDOW_NO_TELEMETRY = (
+    "note: ccusage returned no active usage window (no telemetry). Admitting anyway -- "
+    "a missing window is not an exhausted pool; real limits surface via CLI limit-strings."
 )
 PARK_LIMIT_SESSION = (
     "parked: session (5-hour) usage limit hit; resets {reset}. "
@@ -150,7 +162,7 @@ CANARY_NO_SANDBOX_DETAIL = (
 # B2 opt-out warning, surfaced in the newspaper (ru; user-facing) so the operator sees the
 # missing wall in the morning digest, not just in the start-time canary.
 RU_NO_SANDBOX_WARN = (
-    "  ⚠ ВНИМАНИЕ: OS-песочница ОТКЛЮЧЕНА (allow_no_sandbox) — воркер БЕЗ главной стены:\n"
+    "  ! ВНИМАНИЕ: OS-песочница ОТКЛЮЧЕНА (allow_no_sandbox) — воркер БЕЗ главной стены:\n"
     "     чтение ~/.ssh и SSH/сетевая эксфильтрация НЕ заблокированы. Не для безнадзорных смен.")
 RU_REPORT_TITLE = "СМЕНА orc"
 RU_REPORT_SUMMARY = "смена: {done} готово, {waiting} ждут тебя, {failed} упало; съедено {pct}% окна"
@@ -188,7 +200,7 @@ RU_GATE_CARD = (
 # Appended to a gate card when the decision touches an irreversible action: such gates
 # are NEVER approved as part of a batch (design.md F9) -- the operator answers each alone.
 RU_GATE_IRREVERSIBLE = (
-    "\n     ⚠ необратимое действие — решается ОТДЕЛЬНО, не в батче")
+    "\n     ! необратимое действие — решается ОТДЕЛЬНО, не в батче")
 
 # --- F9 gate notification (ru; user-facing macOS notification) ---
 NOTIFY_GATE_TITLE = "orc: задача ждёт твоего решения"

@@ -144,18 +144,73 @@ def test_refuse_when_ram_unknown():
     assert ok is False and reason == "low-ram"
 
 
-def test_refuse_when_window_nearly_closed():
-    win = {"active": True, "remaining_minutes": 2, "total_tokens": 1}
+def test_admit_when_block_reset_is_near_and_quota_is_free():
+    # REGRESSION for the user-found live bug: `remaining_minutes` is the time until the
+    # 5-hour block RESETS, not remaining quota. A near-reset block (3 min left) with NO
+    # active limit-string means fresh quota is imminent -> ADMIT, do NOT park. The old gate
+    # parked here ("window nearly closed 3 min < 5 min") and self-blocked the loop with
+    # ~70% quota free. There must be no "window-low" reason anymore.
+    win = {"active": True, "remaining_minutes": 3, "total_tokens": 1}
+    ok, reason, meta = admission.admission_check(
+        CFG, free_ram_mb=2000, window=win, ready_count=3)
+    assert ok is True and reason is None
+    assert meta["window"] is None  # active window -> no no-telemetry flag
+
+
+def test_admit_when_remaining_minutes_is_one_no_limit_string():
+    # Even 1 minute to the block reset must ADMIT when no limit-string is active.
+    win = {"active": True, "remaining_minutes": 1, "total_tokens": 1}
     ok, reason, _ = admission.admission_check(
         CFG, free_ram_mb=2000, window=win, ready_count=3)
-    assert ok is False and reason == "window-low"
+    assert ok is True and reason is None
 
 
-def test_refuse_when_window_inactive():
+def test_admit_when_active_window_has_no_remaining_minutes():
+    # remaining_minutes=None on an ACTIVE window must NOT block: admission never reads the
+    # field. Spend the quota; only a real limit-string parks.
+    win = {"active": True, "remaining_minutes": None, "total_tokens": 1}
+    ok, reason, meta = admission.admission_check(
+        CFG, free_ram_mb=2000, window=win, ready_count=1)
+    assert ok is True and reason is None
+    assert meta["window"] is None
+
+
+def test_admit_when_window_inactive_flags_no_telemetry():
+    # An inactive/absent ccusage window is "no telemetry", NOT an exhausted pool. Admit and
+    # flag it in meta (the dispatcher logs it) rather than parking the whole loop.
     win = {"active": False, "remaining_minutes": None, "total_tokens": None}
-    ok, reason, _ = admission.admission_check(
+    ok, reason, meta = admission.admission_check(
         CFG, free_ram_mb=2000, window=win, ready_count=3)
-    assert ok is False and reason == "window-inactive"
+    assert ok is True and reason is None
+    assert meta["window"] == "no-telemetry"
+
+
+def test_admit_when_window_missing_flags_no_telemetry():
+    ok, reason, meta = admission.admission_check(
+        CFG, free_ram_mb=2000, window=None, ready_count=3)
+    assert ok is True and reason is None
+    assert meta["window"] == "no-telemetry"
+
+
+def test_park_only_on_real_limit_string_even_with_ample_window():
+    # Back-pressure is driven by REAL limit-strings, not the block clock: a wide-open window
+    # (200 min left) still parks if the CLI printed a session cap.
+    win = {"active": True, "remaining_minutes": 200, "total_tokens": 1}
+    ok, reason, meta = admission.admission_check(
+        CFG, free_ram_mb=2000, window=win, ready_count=3,
+        limit_text=_fixture("limit-session.txt"), now=NOW)
+    assert ok is False and reason == "limit-session"
+    assert meta["reaction"] == admission.REACT_PARK
+
+
+def test_near_reset_block_with_active_limit_string_still_parks():
+    # The user's scenario inverted: block about to reset (3 min) AND a real session cap ->
+    # park (the limit-string is the truth, the clock is irrelevant).
+    win = {"active": True, "remaining_minutes": 3, "total_tokens": 1}
+    ok, reason, _ = admission.admission_check(
+        CFG, free_ram_mb=2000, window=win, ready_count=3,
+        limit_text=_fixture("limit-session.txt"), now=NOW)
+    assert ok is False and reason == "limit-session"
 
 
 def test_session_limit_refuses_admission_with_reset_meta():
