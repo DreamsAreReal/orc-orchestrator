@@ -3,3 +3,7 @@ __pycache__/
 .pytest_cache/
 .orc/
 shift.json
+# never commit secrets: local env files with credentials (lint finding, fix1)
+.env
+.env.*
+!.env.example

@@ -179,7 +179,12 @@ def _done_row(entry):
 
 
 def _gate_card(hub, parked_entry):
-    """Render a gate decision card. Pulls task detail from bd metadata when present."""
+    """Render a gate decision card. Pulls task detail from bd metadata when present.
+
+    P8: if bd is transiently unavailable (BeadsError), the card DEGRADES to a minimal form
+    (id + park reason + a note) instead of crashing the whole newspaper. The morning digest
+    is the signature artifact -- it must print what it can, never blow up on a flaky bd.
+    """
     task_id = parked_entry.get("task")
     reason = parked_entry.get("reason", "")
     title = task_id
@@ -189,7 +194,11 @@ def _gate_card(hub, parked_entry):
     cost = "—"
     brief_path = "—"
     irreversible = ""
-    task = beads.show(hub, task_id) if task_id else None
+    try:
+        task = beads.show(hub, task_id) if task_id else None
+    except beads.BeadsError:
+        # bd down at render time -> degrade this one card, keep the rest of the newspaper.
+        return S.RU_GATE_CARD_DEGRADED.format(id=task_id, reason=reason or "—")
     if task:
         title = task.get("title", task_id)
         meta = beads.task_meta(task)

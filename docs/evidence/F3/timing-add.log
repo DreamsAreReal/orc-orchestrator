@@ -1,19 +1,19 @@
 === F3 G11 batch-add timing ===
-date: Wed Jul 15 05:55:53 +04 2026
-orc hub initialized at /tmp/orc-timing-home.3Lpe8y (beads queue ready)
+date: Wed Jul 15 14:19:20 +04 2026
+orc hub initialized at /tmp/orc-timing-home.WbcjBS (beads queue ready inside .beads/)
 --- 10 prepared lines ---
-/tmp/orc-timing-p1.ySfm7A: build feature 1 for project one
-/tmp/orc-timing-p1.ySfm7A: build feature 2 for project one
-/tmp/orc-timing-p1.ySfm7A: build feature 3 for project one
-/tmp/orc-timing-p1.ySfm7A: build feature 4 for project one
-/tmp/orc-timing-p1.ySfm7A: build feature 5 for project one
-/tmp/orc-timing-p2.Lepiri: build feature 6 for project two
-/tmp/orc-timing-p2.Lepiri: build feature 7 for project two
-/tmp/orc-timing-p2.Lepiri: build feature 8 for project two
-/tmp/orc-timing-p2.Lepiri: build feature 9 for project two
-/tmp/orc-timing-p2.Lepiri: build feature 10 for project two
+/tmp/orc-timing-p1.LOfxAC: build feature 1 for project one
+/tmp/orc-timing-p1.LOfxAC: build feature 2 for project one
+/tmp/orc-timing-p1.LOfxAC: build feature 3 for project one
+/tmp/orc-timing-p1.LOfxAC: build feature 4 for project one
+/tmp/orc-timing-p1.LOfxAC: build feature 5 for project one
+/tmp/orc-timing-p2.5oMpjL: build feature 6 for project two
+/tmp/orc-timing-p2.5oMpjL: build feature 7 for project two
+/tmp/orc-timing-p2.5oMpjL: build feature 8 for project two
+/tmp/orc-timing-p2.5oMpjL: build feature 9 for project two
+/tmp/orc-timing-p2.5oMpjL: build feature 10 for project two
 added 10 task(s) to ready
 
-elapsed: 6s (threshold 300s)
+elapsed: 7s (threshold 300s)
 ready tasks: 10 (expected 10)
-G11 PASS: 10 tasks in ready in 6s (<= 5 min).
+G11 PASS: 10 tasks in ready in 7s (<= 5 min).

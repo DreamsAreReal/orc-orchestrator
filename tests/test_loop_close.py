@@ -74,6 +74,15 @@ def _register(project, slug, task_id, tab_id):
     return state
 
 
+def _real_deliverable(project):
+    """Create a real deliverable AFTER the worker started so the B1 external-fact gate
+    (a DONE claim is trusted only with real progress on disk) sees genuine work. A worker
+    that only wrote its own docs/tasks/STATE.md would NOT pass this -- see
+    test_poll_done_without_external_fact_is_parked below."""
+    with open(os.path.join(project, "deliverable.txt"), "w") as f:
+        f.write("real work product\n")
+
+
 def test_poll_no_state_leaves_worker_running(tmp_path, monkeypatch):
     proj = str(tmp_path)
     monkeypatch.setattr(dispatcher, "_worker_slug", lambda hub, tid, p: "slug1")
@@ -96,6 +105,9 @@ def test_poll_done_closes_loop(tmp_path, monkeypatch):
                         lambda cfg, wid, session=None: closed_win.append(wid) or True)
 
     state = _register(proj, "slug1", "t-1", "5000")
+    # B1: a DONE claim is honored only with a real external fact. The worker produced a
+    # genuine deliverable after it started -> external_progress passes -> loop closes.
+    _real_deliverable(proj)
     state, tr = dispatcher.poll_completions(state, "hub")
 
     assert tr == [("t-1", "done")]
@@ -103,6 +115,36 @@ def test_poll_done_closes_loop(tmp_path, monkeypatch):
     assert closed_win == ["5000"]          # worker's window closed by saved handle
     assert state["workers"] == []          # no longer active
     assert [d["task"] for d in state["done"]] == ["t-1"]   # shows in the newspaper
+
+
+def test_poll_done_without_external_fact_is_parked(tmp_path, monkeypatch):
+    """B1 reward-hacking gate: a worker that writes STATE.md=DONE but produced NO external
+    fact (no commit, no changed/created deliverable -- only its own orc-managed STATE.md)
+    must NOT close the task. It is parked 'suspected fake-done' and its bd task is blocked,
+    not closed. This is the Replit-class incident named in the brief (G1: DONE confirmed by
+    external facts, never the worker's self-report)."""
+    proj = str(tmp_path)
+    _write_state(proj, "slug1", DONE_REAL)   # only the orc-managed STATE.md, nothing else
+    monkeypatch.setattr(dispatcher, "_worker_slug", lambda hub, tid, p: "slug1")
+    closed_bd = []
+    blocked = []
+    closed_win = []
+    monkeypatch.setattr(dispatcher.beads, "close",
+                        lambda hub, tid: closed_bd.append(tid) or True)
+    monkeypatch.setattr(dispatcher.beads, "set_status",
+                        lambda hub, tid, st: blocked.append((tid, st)) or True)
+    monkeypatch.setattr(dispatcher.spawn, "close_worker",
+                        lambda cfg, wid, session=None: closed_win.append(wid) or True)
+
+    state = _register(proj, "slug1", "t-1", "5000")
+    state, tr = dispatcher.poll_completions(state, "hub")
+
+    assert tr == [("t-1", "suspected-fake-done")]
+    assert closed_bd == []                          # bd task NOT closed
+    assert ("t-1", "blocked") in blocked            # bd task blocked instead
+    assert closed_win == []                         # worker window kept for inspection
+    assert [d["task"] for d in state.get("done", [])] == []          # not "done"
+    assert [p["task"] for p in state.get("parked", [])] == ["t-1"]   # parked for the operator
 
 
 def test_poll_gate_parks_and_keeps_window(tmp_path, monkeypatch):
@@ -139,6 +181,9 @@ def test_poll_bd_error_still_repairs_shift(tmp_path, monkeypatch):
                         lambda cfg, wid, session=None: True)
 
     state = _register(proj, "slug1", "t-1", "5000")
+    # B1: real external fact so the DONE is honored (the point of this test is the bd-error
+    # repair, not the reward-hacking gate).
+    _real_deliverable(proj)
     state, tr = dispatcher.poll_completions(state, "hub")
 
     assert tr == [("t-1", "done")]
@@ -173,7 +218,10 @@ def test_spawn_records_window_id_not_none(tmp_path, monkeypatch):
     monkeypatch.setattr(dispatcher.spawn, "worker_pid",
                         lambda cfg, project, session, handle=None: 55555)
 
-    cfg = {"claude_bin": "/bin/true", "mcp_allowlist": [], "terminal": "terminal"}
+    # allow_no_sandbox: this test mocks the actual spawn; the sandbox fail-closed gate (P5)
+    # is exercised in test_dispatcher, not here, so opt out to stay machine-independent.
+    cfg = {"claude_bin": "/bin/true", "mcp_allowlist": [], "terminal": "terminal",
+           "allow_no_sandbox": True}
     task = {"id": "t-1", "metadata": {"project": proj, "slug": "s", "text": "x"}}
     state = shiftmod._empty()
     ok, detail, state = dispatcher.spawn_one(cfg, "hub", state, task)

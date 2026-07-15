@@ -244,6 +244,28 @@ North Star: утром накидал ~10 задач по проектам — M
 - ЧЕСТНОЕ ОПРОВЕРЖЕНИЕ прошлого self-pass: заявление «0 husk / окно само закрывается» ОТОЗВАНО — Ghostty не исполнял (окно пустое), Terminal husk неустраним скриптом. 175 тестов, 0 регрессий.
 
 ---
+
+### ФИКС-ВОЛНА цикл 1 (фаза 5 verify — P0: блокеры + профминимум-безопасность + полнота)
+Из вердиктов R-final-{E1,E2,E3}. Каждый — фикс + регресс-тест зелёный (evidence в docs/evidence/fix1/).
+БЛОКЕРЫ:
+- [x] **B1 reward-hacking** (dispatcher.poll_completions): DONE засчитывается ТОЛЬКО при внешнем факте (git-коммит после старта воркера ИЛИ изменённый/созданный артефакт); нет факта → park «suspected-fake-done», bd blocked. `watchdog.external_progress` подключён к completion + фильтр расширен (orc-managed .claude/.orc/docs/tasks — не деливерабл). Статус: self-pass
+  - `bash .verify/e3/e3-rewardhack-live.sh` → exit 0: фейк-DONE ПАРКУЕТСЯ (bd blocked, HEAD unchanged), control (реальный коммит) закрывается. Лог: docs/evidence/fix1/B1-rewardhack-regress.log
+  - unit: test_poll_done_without_external_fact_is_parked (+ 2 loop-close обновлены под реальный деливерабл, не ослабление).
+- [x] **B2 обфусц. SSH git push + ~/.ssh read** (worker_walls + sandbox): env снимает SSH-push (GIT_SSH_COMMAND/GIT_SSH=/usr/bin/false, SSH_AUTH_SOCK='', core.sshCommand); seatbelt `(deny file-read* (subpath <HOME>/.ssh))`. Статус: self-pass
+  - `bash .verify/e3/e3-exfil2.sh` → exit 0 (3/3): SSH-auth под sandbox denied, git-push через env падает, ключ-read под sandbox EPERM. Комбо real-path (env+sandbox+attacker override) → WALL HELD. Логи: docs/evidence/fix1/B2-exfil-regress.log, B2-combined-realpath.log
+  - unit: test_push_neutralizing_env_disables_ssh_transport, test_profile_denies_reading_ssh.
+ПРОФМИНИМУМ-БЕЗОПАСНОСТЬ:
+- [x] **P3 секрет-env на спавне** (spawn.build_start_command): `unset` секрет-денилиста ПЕРВЫМ в prefix; claude OAuth (Keychain) не тронут. Живой: секреты→CLEARED, 0 leak. docs/evidence/fix1/P3-env-strip-regress.log. unit: test_start_command_unsets_secrets_on_spawn.
+- [x] **P4 orc stop PID-anchored** (cli.cmd_stop): SIGKILL по PID из shift.json как якорь, tty — фолбэк. Регресс: tty=None → воркер убит по PID (rc=-9). docs/evidence/fix1/P4-stop-pid-anchored.log. unit: test_stop_kills_recorded_pid_when_tty_resolution_fails.
+- [x] **P5 sandbox fail-closed** (sandbox.sandbox_gate + spawn_one): недоступен/off без allow_no_sandbox → НЕ спавнить, park. docs/evidence/fix1/P5-sandbox-fail-closed.log. unit: 4 (unavailable/disabled/opt-out/gate).
+ПОЛНОТА (дёшево):
+- [x] **P6 G7 canary-уведомление** (notify.notify_canary_fail): на canary-fail — macOS-уведомление. docs/evidence/fix1/P6-P7-canary-notify-json.log.
+- [x] **P7 start --json цельный** (cmd_start): человекочит.→stderr, stdout=только валидный JSON (json.tool парсит). docs/evidence/fix1/P6-P7-canary-notify-json.log.
+- [x] **P8 newspaper деградирует** (report._gate_card): try/except BeadsError → минимальная карточка+пометка, не краш. docs/evidence/fix1/P8-newspaper-degrade.log. unit: 2.
+- [x] **P9 .env в .gitignore** (.env/.env.*/!.env.example). docs/evidence/fix1/P9-gitignore-env.log.
+Итог фикс-волны: 210 → **224 теста** (+14), 0 регрессий. Смоук после: pytest 224, e2e-loop-close PASS, sandbox-walls PASS, push-wall PASS. P1-волна (loop-детект чередование, живой pipeline-прогон, сеть-эксфильтрация) — НЕ в этом цикле.
+
+---
 Майлстоуны: M1 = F1-F4 ✓verified + F14 (замыкание петли, из consumer), M2 = F5-F9 + F15 (надёжность + гейт + бэкенд-абстракция), M3 = F10 + F13 (ops + OS-sandbox), M4 = F11-F12 (патчи конвейера + E2E).
 Золотой путь: F2 (скелет+signature), F4 (ядро), F9 (гейт-опыт).
 Порядок священен: F1 (стены-гейт) ДО F2 (первый реальный спавн). Дефолтный бэкенд спавна = Terminal.app (исполняет команду воркера); Ghostty opt-in (нефункционален на 1.3.1).

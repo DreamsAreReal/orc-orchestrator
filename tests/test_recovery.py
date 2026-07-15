@@ -158,7 +158,7 @@ def test_spawn_one_records_real_pid_via_window(tmp_path, monkeypatch):
     subprocess.run(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t",
                     "commit", "-q", "--allow-empty", "-m", "i"], check=True)
     cfg = {"claude_bin": "/bin/true", "mcp_allowlist": [], "terminal": "terminal",
-           "min_free_ram_mb": 400, "min_window_minutes": 5}
+           "min_free_ram_mb": 400, "min_window_minutes": 5, "allow_no_sandbox": True}
     st = shiftmod._empty()
     monkeypatch.setattr(dispatcher.beads, "claim", lambda hub, tid: True)
     monkeypatch.setattr(dispatcher.beads, "set_status", lambda *a, **k: None)
@@ -178,3 +178,57 @@ def test_spawn_one_records_real_pid_via_window(tmp_path, monkeypatch):
     assert ok is True
     assert st["workers"][0]["pid"] == 45678       # real PID captured (not None)
     assert st["workers"][0]["tab_id"] == "77"
+
+
+# --------------------------------------------------------------------------- #
+# P4 (E3 fix): `orc stop` is PID-anchored -- it kills the RECORDED worker PID even when
+# tty resolution fails (stale/gone window on the Terminal backend), so no worker survives.
+# --------------------------------------------------------------------------- #
+def test_stop_kills_recorded_pid_when_tty_resolution_fails(tmp_path, monkeypatch):
+    import subprocess
+    import time as _t
+    from orc import cli
+    monkeypatch.setenv("ORC_HOME", str(tmp_path / "home"))
+    # a REAL, killable child worker (its own process group so we can assert it dies)
+    child = subprocess.Popen(["sleep", "30"])
+    try:
+        # record it in shift.json as an active worker with a tab_id whose tty WON'T resolve
+        st = shiftmod._empty()
+        shiftmod.add_worker(st, pid=child.pid, session="w1", project="/p",
+                            task="t-stop", tab_id="9999")
+        shiftmod.save(st)
+
+        # simulate the degraded Terminal case: window_tty returns None (window gone/stale),
+        # close_worker's tty kill therefore does nothing -> only the PID anchor can save us.
+        monkeypatch.setattr(dispatcher.spawn, "close_worker",
+                            lambda cfg, handle, session=None: {"killed": 0, "window_closed": False})
+        monkeypatch.setattr(dispatcher.spawn, "window_tty", lambda wid: None)
+        monkeypatch.setattr(dispatcher.spawn, "pids_on_tty", lambda tty: [])
+        # bd reopen: no real hub here
+        monkeypatch.setattr(dispatcher.beads, "show",
+                            lambda hub, tid: {"id": tid, "status": "in_progress"})
+        monkeypatch.setattr(dispatcher.beads, "reopen", lambda hub, tid: None)
+
+        class _Args:
+            json = True
+        rc = cli.cmd_stop(_Args())
+        assert rc == 0
+
+        # the recorded PID must be dead now (PID-anchored SIGKILL fired despite no tty).
+        # child.poll() reaps the zombie so we observe the real termination (a killed but
+        # unreaped child would still answer os.kill(pid,0) to its parent).
+        deadline = _t.time() + 3
+        exited = False
+        while _t.time() < deadline:
+            if child.poll() is not None:
+                exited = True
+                break
+            _t.sleep(0.1)
+        assert exited, "recorded worker PID survived `orc stop` (tty fallback only)"
+        # a SIGKILL shows up as negative returncode -9
+        assert child.returncode in (-9, -15), "worker not killed by signal (rc=%s)" % child.returncode
+    finally:
+        try:
+            child.kill()
+        except OSError:
+            pass

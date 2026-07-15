@@ -245,12 +245,25 @@ def classify(session, cfg, now=None, silence_seconds=120, busy=None):
 
 
 # --- external post-condition check (anti-hallucinated-success) --------------- #
+# Paths orc itself generates in a project -- NOT the worker's real deliverable. A dirty
+# tree consisting only of these is NOT external progress (a worker cannot pass the DONE
+# wall by writing its own docs/tasks/<slug>/STATE.md, which is exactly the reward-hack
+# path -- B1). Kept in sync with dispatcher._OURS_PREFIXES:
+#   .claude/ -> the F1 deny-walls settings.json; .orc/ -> the F13 seatbelt profile;
+#   docs/tasks/ -> the two-layer task mini-pipe (incl. the STATE.md the worker writes to
+#   signal DONE -- orc-managed, never counts as the deliverable itself).
+_ORC_MANAGED_PREFIXES = (".claude/", ".orc/", "docs/tasks/")
+
+
 def external_progress(project, since_epoch=None):
     """Check REAL progress on disk, not the worker's self-report (design.md P6).
 
     Returns True if the project shows genuine forward motion: a git commit newer than
     since_epoch, or uncommitted changes staged/working (the worker is producing output).
-    A stuck worker that has made NO real change fails this -> safe to kill and restart.
+    A stuck worker that has made NO real change fails this -> safe to kill and restart, and
+    (B1) a worker that only wrote its own DONE-claiming STATE.md fails this too -> its DONE
+    is NOT trusted. orc-managed files (.claude/, .orc/, docs/tasks/) never count as the
+    worker's deliverable.
     """
     from . import gitutil
     if not gitutil.is_repo(project):
@@ -260,9 +273,11 @@ def external_progress(project, since_epoch=None):
     last = gitutil.head_commit_epoch(project)
     if last is not None and since_epoch is not None and last > since_epoch:
         return True
-    # or uncommitted work in progress (dirty tree beyond our own settings artifact)
+    # or uncommitted work in progress (dirty tree beyond our OWN orc-managed artifacts:
+    # a worker's own .claude/settings.json, .orc/ profile, or docs/tasks/ STATE.md is not
+    # a real deliverable and must not pass the external-fact gate -- B1 reward-hacking).
     dirty = gitutil.dirty_paths(project)
-    foreign = [p for p in dirty if not p.startswith(".claude/")]
+    foreign = [p for p in dirty if not p.startswith(_ORC_MANAGED_PREFIXES)]
     return bool(foreign)
 
 

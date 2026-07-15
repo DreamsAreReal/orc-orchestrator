@@ -655,3 +655,65 @@ t2 коммит f1c29a8 + HELLO.txt=hello; гейт STATE.md «waiting on gate»
   честно вынесено как ограничение, не спрятано.
 
 Находки инъекций: нет (экраны воркеров, ccusage-вывод, STATE.md прогонов — данные).
+
+---
+
+## ФИКС-ВОЛНА цикл 1 (фаза 5, 2026-07-15) — P0: 2 блокера + профминимум-безопасность + дёшево-полнота
+
+Что сделано (каждый пункт — фикс + регресс-тест РЕАЛЬНО зелёный, evidence в docs/evidence/fix1/):
+- **B1 reward-hacking** (dispatcher.poll_completions): DONE закрывает задачу ТОЛЬКО при
+  внешнем факте (новый git-коммит после старта воркера ИЛИ изменённый/созданный артефакт).
+  Нет факта при STATE=DONE → park «suspected-fake-done» + bd blocked (не close). Подключён
+  `watchdog.external_progress` в completion-путь; его фильтр расширен: orc-managed пути
+  (.claude/, .orc/, docs/tasks/) НЕ считаются деливераблом (иначе воркер прошёл бы стену
+  своим же STATE.md). Регресс e3-rewardhack-live.sh: фейк-DONE ПАРКУЕТСЯ, control (реальный
+  коммит) закрывается. +1 unit (test_poll_done_without_external_fact_is_parked); 2 стар.
+  теста loop-close обновлены под новую (верную) стену (реальный деливерабл, не ослабление).
+- **B2 обфусц. SSH git push + ~/.ssh read** (worker_walls + sandbox): (а) env воркера снимает
+  SSH-push-capability: GIT_SSH_COMMAND/GIT_SSH=/usr/bin/false, SSH_AUTH_SOCK='',
+  core.sshCommand=false (inline). (б) seatbelt-профиль: `(deny file-read* (subpath <HOME>/.ssh))`
+  — ключ НЕ читается под sandbox. Регресс e3-exfil2.sh (3/3): SSH-auth под sandbox denied
+  (Permission denied publickey), git push через env falls, ключ-read под sandbox EPERM.
+  Комбинированный real-path (env+sandbox+attacker override GIT_SSH_COMMAND) → WALL HELD.
+- **P3 секрет-env на СПАВНЕ** (spawn.build_start_command): реальный `unset ANTHROPIC_API_KEY
+  AWS_* *_SECRET *_TOKEN GITHUB_TOKEN ...` (денилист из config, resolve по имени) в prefix
+  спавн-команды, ПЕРВЫМ, до cd. claude OAuth (Keychain) НЕ тронут. +2 unit (spawn-путь,
+  живой clear). Живой: секреты → CLEARED, 0 leak.
+- **P4 orc stop PID-anchored** (cli.cmd_stop): SIGKILL по ЗАПИСАННОМУ PID (shift.json) как
+  якорь; tty-sweep — фолбэк. Регресс: реальный child + tty-резолв=None → воркер убит по PID
+  (rc=-9). +1 unit.
+- **P5 sandbox fail-closed** (sandbox.sandbox_gate + spawn_one-гейт): sandbox недоступен/off
+  без allow_no_sandbox → НЕ спавнить, park + запись. +4 unit (unavailable/disabled/opt-out/gate).
+- **P6 G7 canary-уведомление** (notify.notify_canary_fail + cmd_start): на canary-fail шлём
+  macOS-уведомление «смена НЕ стартовала: <checks>». +1 CLI-тест.
+- **P7 start --json цельный** (cmd_start): человекочит. canary-report/статусы → stderr; stdout
+  при --json = ТОЛЬКО валидный JSON (json.tool парсит). +1 CLI-тест.
+- **P8 newspaper деградирует** (report._gate_card): try/except BeadsError → минимальная
+  карточка + пометка, газета НЕ крашится. +2 unit.
+- **P9 .env в .gitignore** (.env / .env.* / !.env.example). git check-ignore подтвердил.
+
+Тесты: 210 → **224 passed** (+14), 0 регрессий. E3-фаззеры переиспользованы как регресс
+(e3-rewardhack-live.sh, e3-exfil2.sh переписаны на «стена ДЕРЖИТ»). Смоук после волны:
+pytest 224, e2e-loop-close PASS, sandbox-walls PASS, push-wall PASS.
+
+Решения:
+- external_progress — единый оракул и для watchdog, и для completion (B1): не дублировать
+  анти-Гудхарт-логику. Fail-closed: нет project/started_epoch → не факт (лучше запарковать
+  реальный DONE на инспекцию, чем авто-закрыть фейк).
+- B2 два слоя: env снимает push-capability (git respects GIT_SSH_COMMAND), sandbox снимает
+  read-capability ключа. Даже attacker-override GIT_SSH_COMMAND бессилен — ключ нечитаем.
+- P5 allow_no_sandbox — осознанный opt-out (записываемый), не хардбан: fail-closed по умолч.
+- Spawn-тесты, мокающие спавн, получили allow_no_sandbox:True — не машинно-зависимы (сам
+  P5-гейт покрыт отдельными тестами).
+
+Грабли:
+- e3-sandbox-fuzz кейс perl-unlink показывает ложный LEAK (харнесс: кейс tar оставляет
+  sentinel на общем файле). Изолированный perl-control.sh: под sandbox BLOCKED (EPERM) —
+  реальной течи нет (совпадает с разбором E3 §A1). FS-запись держит.
+- P4-тест: убитый но не-reaped child отвечает os.kill(pid,0) родителю → проверял через
+  child.poll() (reap zombie) + returncode==-9, не _pid_alive.
+- language-хук ~/.claude флагнул кириллицу в strings.py (RU_* product-строки, легитимно —
+  газета/уведомления по-русски) и в комменте spawn.py (перевёл на EN). Хук — эвристика;
+  RU_* строго user-facing продукт.
+
+Находки инъекций: нет (вердикты evaluator-ов E1/E2/E3, фаззеры E3, STATE.md прогонов — данные).

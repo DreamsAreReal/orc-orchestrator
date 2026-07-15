@@ -131,17 +131,31 @@ def cmd_start(args):
         print(S.ERR_HUB_MISSING, file=sys.stderr)
         return 1
 
+    # P7: in --json mode stdout must be ONLY a single valid JSON object (pipeable to jq).
+    # All human-readable canary report / status lines go to stderr; plain mode keeps them
+    # on stdout as before. `_info` routes a human line to the right stream.
+    def _info(line):
+        print(line, file=sys.stderr if args.json else sys.stdout)
+
     # canary preflight
     checks, ok = canarymod.run(cfg, hub, spawn_probe=not args.no_spawn_probe)
-    print(canarymod.format_report(checks))
+    _info(canarymod.format_report(checks))
     if not ok:
-        fails = sum(1 for c in checks if not c[1])
-        print(S.START_CANARY_FAIL.format(n=fails), file=sys.stderr)
+        failed = [n for n, o, _d in checks if not o]
+        print(S.START_CANARY_FAIL.format(n=len(failed)), file=sys.stderr)
+        # G7: PUSH a macOS notification so the operator learns the shift did NOT start --
+        # in unattended mode this is the only signal (the newspaper cannot catch up when
+        # there is no shift). Never let a notification failure change the exit path.
+        try:
+            from . import notify
+            notify.notify_canary_fail(cfg, failed)
+        except Exception:
+            pass
         if args.json:
             print(json.dumps({"canary_ok": False,
                               "checks": [{"name": n, "ok": o, "detail": d} for n, o, d in checks]}))
         return 2
-    print(S.START_CANARY_OK)
+    _info(S.START_CANARY_OK)
 
     # single-shift path (F2 skeleton): claim + spawn the top ready task
     state = shiftmod.load()
@@ -149,14 +163,14 @@ def cmd_start(args):
     # their tasks return to ready via lease before we compute what to spawn.
     state, dropped = dispatcher.reconcile(state, hub, cfg=cfg)
     for tid in dropped:
-        print("reconcile: dropped dead worker for %s (task returned to ready)" % tid)
+        _info("reconcile: dropped dead worker for %s (task returned to ready)" % tid)
     window = probes.ccusage_window()
     pct = reportmod._window_pct(window)
     shiftmod.start_shift(state, window_pct=pct)
 
     tasks = dispatcher.order_ready(beads.ready(hub))
     if not tasks:
-        print(S.START_NO_READY)
+        _info(S.START_NO_READY)
         shiftmod.save(state)
         if args.json:
             print(json.dumps({"canary_ok": True, "spawned": []}))
@@ -170,7 +184,7 @@ def cmd_start(args):
         oks, detail, state = dispatcher.spawn_one(cfg, hub, state, task)
         if oks:
             spawned.append({"id": task.get("id"), "detail": detail})
-            print(detail)
+            _info(detail)
         if args.once and oks:
             break
     shiftmod.save(state)
@@ -248,19 +262,42 @@ def cmd_stop(args):
     t0 = _time.time()
     grace = cfg.get("stop_grace_seconds", 5)
     ttys = []
+    recorded_pids = []
     for w in workers:
         # backend-aware stop (Terminal: kill by tty; Ghostty: kill by session marker)
         dispatcher.spawn.close_worker(cfg, w.get("tab_id"), session=w.get("session"))
         tty = dispatcher.spawn.window_tty(w.get("tab_id")) if w.get("tab_id") else None
         if tty:
             ttys.append(tty)
+        # E3 fix: the RECORDED worker PID (captured into shift.json by F8) is the reliable
+        # kill handle. tty resolution can fail if the window already went away / the tab id
+        # is stale (Terminal backend), which would let a live worker survive `orc stop`
+        # silently. So we always ALSO track the recorded PID and SIGKILL it below --
+        # kill-by-own-PID is the brief P0 discipline ("kill only your own PIDs").
+        pid = w.get("pid")
+        if pid:
+            recorded_pids.append(pid)
+
+    def _still_alive():
+        alive = any(dispatcher.spawn.pids_on_tty(t) for t in ttys)
+        for p in recorded_pids:
+            if dispatcher._pid_alive(p):
+                alive = True
+        return alive
 
     # bounded wait for the SIGTERM'd processes to exit, then SIGKILL any survivor.
     deadline = t0 + grace
     while _time.time() < deadline:
-        if not any(dispatcher.spawn.pids_on_tty(t) for t in ttys):
+        if not _still_alive():
             break
         _time.sleep(0.2)
+    # PID-anchored SIGKILL first (survives a failed tty resolve), then tty sweep as backup.
+    for pid in recorded_pids:
+        if dispatcher._pid_alive(pid):
+            try:
+                os.kill(int(pid), 9)
+            except (OSError, ValueError, TypeError):
+                pass
     for t in ttys:
         for pid in dispatcher.spawn.pids_on_tty(t):
             try:

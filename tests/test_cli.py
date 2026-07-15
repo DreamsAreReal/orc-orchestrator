@@ -105,6 +105,44 @@ def test_status_live_no_shift_message(env, tmp_path):
     assert "orc add" in r.stdout
 
 
+def test_start_json_is_pure_json_on_canary_fail(env, tmp_path):
+    """P7 (paspport): `orc start --json` stdout must be a SINGLE valid JSON object even
+    when the canary fails -- the human-readable canary report goes to stderr, so the
+    output pipes cleanly into jq. Before the fix the report preamble was printed to stdout
+    ahead of the JSON and jq choked."""
+    e, home = env
+    e = dict(e)
+    e["ORC_CANARY_FAIL"] = "auth"            # deterministic canary failure
+    r = _run(e, "start", "--once", "--no-spawn-probe", "--json")
+    assert r.returncode == 2                 # shift did not start
+    # stdout is ONE clean JSON object (no canary preamble leaked onto stdout)
+    d = json.loads(r.stdout)                  # would raise if preamble leaked
+    assert d["canary_ok"] is False
+    assert any(c["name"] == "auth" and c["ok"] is False for c in d["checks"])
+    # the human-readable report lives on stderr, not stdout
+    assert "canary preflight" in r.stderr
+    assert "canary preflight" not in r.stdout
+
+
+def test_start_notifies_on_canary_fail(env, tmp_path):
+    """P6 / G7: on a canary failure a macOS notification is PUSHED (the operator learns the
+    shift did not start even unattended). ORC_NOTIFY_DRYRUN records the composed script."""
+    e, home = env
+    e = dict(e)
+    e["ORC_CANARY_FAIL"] = "auth"
+    e["ORC_NOTIFY_DRYRUN"] = "1"
+    log = str(tmp_path / "notify.log")
+    e["ORC_NOTIFY_LOG"] = log
+    r = _run(e, "start", "--once", "--no-spawn-probe")
+    assert r.returncode == 2
+    assert os.path.exists(log), "no notification was fired on canary failure"
+    body = open(log).read()
+    # the notification names the failed shift and the failing check
+    assert "auth" in body
+    # and it is the canary-fail notification (product title), not a gate one
+    assert "orc" in body.lower()
+
+
 def test_gate_task_ordered_last(env, tmp_path):
     e, home = env
     proj = _mkproj(tmp_path, "p1")

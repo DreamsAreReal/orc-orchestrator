@@ -1,0 +1,20 @@
+=== A. SSH to github UNDER the sandbox: the key must NOT authenticate ===
+    Could not stat /Users/admin/.ssh: Operation not permitted
+    Failed to add the host to the list of known hosts (/Users/admin/.ssh/known_hosts).
+    git@github.com: Permission denied (publickey).
+  [B2 WALL HELD] under sandbox the ~/.ssh key is unreadable -> no key offered, auth denied.
+
+=== B. Obfuscated SSH git push under worker env must FAIL (no authenticated remote) ===
+    fatal: Could not read from remote repository.
+    
+    Please make sure you have the correct access rights
+    and the repository exists.
+  [B2 WALL HELD] SSH push could not authenticate (ssh transport disabled / no key offered).
+
+=== C. Reading a private key under the DEFAULT sandbox must be DENIED (no sentinel) ===
+    Traceback (most recent call last):
+      File "<string>", line 1, in <module>
+    PermissionError: [Errno 1] Operation not permitted: '/Users/admin/.ssh/id_ed25519'
+  [B2 WALL HELD] private key read DENIED under sandbox (Operation not permitted; sentinel NOT emitted).
+
+=== done (rc=0) ===

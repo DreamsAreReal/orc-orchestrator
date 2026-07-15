@@ -140,7 +140,10 @@ def test_record_revalidate_note_writes_state(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_mutex_refuses_second_same_project(tmp_path, monkeypatch):
     repo = _repo(str(tmp_path / "proj"))
-    cfg = {"claude_bin": "/bin/true", "mcp_allowlist": [], "terminal": "terminal"}
+    # allow_no_sandbox: this test mocks the spawn and asserts the mutex, not the sandbox
+    # wall (P5 gate is covered by test_spawn_one_fail_closed_* below).
+    cfg = {"claude_bin": "/bin/true", "mcp_allowlist": [], "terminal": "terminal",
+           "allow_no_sandbox": True}
     state = shiftmod._empty()
 
     claimed = []
@@ -171,6 +174,70 @@ def test_mutex_refuses_second_same_project(tmp_path, monkeypatch):
     assert ok2 is False and "mutex" in d2
     assert claimed == ["a"]          # b never claimed
     assert spawned == [repo]          # only one spawn happened
+
+
+def _spawn_gate_stubs(monkeypatch, spawned, claimed):
+    """Common stubs so spawn_one reaches the sandbox gate deterministically."""
+    monkeypatch.setattr(dispatcher.beads, "claim", lambda hub, tid: claimed.append(tid))
+    monkeypatch.setattr(dispatcher.beads, "set_status", lambda *a, **k: None)
+    monkeypatch.setattr(dispatcher.beads, "show", lambda *a, **k: None)
+    monkeypatch.setattr(dispatcher, "prepare_worker_walls", lambda cfg, p: ("x", False))
+    monkeypatch.setattr(dispatcher.probes, "total_tokens_now", lambda: 0)
+    monkeypatch.setattr(dispatcher.probes, "free_ram_mb", lambda: 4000)
+    monkeypatch.setattr(dispatcher.probes, "ccusage_window",
+                        lambda: {"active": True, "remaining_minutes": 200})
+    monkeypatch.setattr(dispatcher.spawn, "spawn_worker",
+                        lambda cfg, p, c, prompt, session=None: (spawned.append(p) or (True, "t")))
+    monkeypatch.setattr(dispatcher.spawn, "worker_pid",
+                        lambda cfg, p, session, handle=None: 12345)
+
+
+def test_spawn_one_fail_closed_when_sandbox_unavailable(tmp_path, monkeypatch):
+    """P5: sandbox enabled (default) but seatbelt unavailable -> REFUSE to spawn (fail-closed),
+    task parked, never claimed. An unattended worker must never run without its primary wall."""
+    from orc import sandbox as sandboxmod
+    repo = _repo(str(tmp_path / "proj"))
+    claimed, spawned = [], []
+    _spawn_gate_stubs(monkeypatch, spawned, claimed)
+    monkeypatch.setattr(sandboxmod, "sandbox_available", lambda: False)  # no seatbelt
+    cfg = {"claude_bin": "/bin/true", "mcp_allowlist": [], "terminal": "terminal"}  # sandbox default on
+    state = shiftmod._empty()
+    task = {"id": "s", "metadata": {"project": repo, "slug": "s", "text": "x"}}
+    ok, detail, state = dispatcher.spawn_one(cfg, "hub", state, task)
+    assert ok is False and "sandbox-fail-closed" in detail and "unavailable" in detail
+    assert claimed == [] and spawned == []              # never claimed, never spawned
+    assert any(p["task"] == "s" for p in state["parked"])
+
+
+def test_spawn_one_fail_closed_when_sandbox_disabled(tmp_path, monkeypatch):
+    """P5: sandbox=false without allow_no_sandbox -> REFUSE (fail-closed), parked, not claimed."""
+    repo = _repo(str(tmp_path / "proj"))
+    claimed, spawned = [], []
+    _spawn_gate_stubs(monkeypatch, spawned, claimed)
+    cfg = {"claude_bin": "/bin/true", "mcp_allowlist": [], "terminal": "terminal",
+           "sandbox": False}   # explicitly off, but no opt-out
+    state = shiftmod._empty()
+    task = {"id": "d", "metadata": {"project": repo, "slug": "d", "text": "x"}}
+    ok, detail, state = dispatcher.spawn_one(cfg, "hub", state, task)
+    assert ok is False and "sandbox-fail-closed" in detail and "disabled" in detail
+    assert claimed == [] and spawned == []
+    assert any(p["task"] == "d" for p in state["parked"])
+
+
+def test_spawn_one_allows_explicit_no_sandbox_optout(tmp_path, monkeypatch):
+    """P5: an operator MAY run without the sandbox deliberately (allow_no_sandbox=true) --
+    the refusal is a fail-closed default, not a hard ban."""
+    from orc import sandbox as sandboxmod
+    repo = _repo(str(tmp_path / "proj"))
+    claimed, spawned = [], []
+    _spawn_gate_stubs(monkeypatch, spawned, claimed)
+    monkeypatch.setattr(sandboxmod, "sandbox_available", lambda: False)
+    cfg = {"claude_bin": "/bin/true", "mcp_allowlist": [], "terminal": "terminal",
+           "sandbox": False, "allow_no_sandbox": True}   # explicit, recorded opt-out
+    state = shiftmod._empty()
+    task = {"id": "o", "metadata": {"project": repo, "slug": "o", "text": "x"}}
+    ok, detail, state = dispatcher.spawn_one(cfg, "hub", state, task)
+    assert ok is True and spawned == [repo]             # spawns despite no sandbox (opt-out)
 
 
 def test_spawn_one_parks_dirty_project(tmp_path, monkeypatch):

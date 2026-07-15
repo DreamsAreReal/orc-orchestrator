@@ -111,11 +111,37 @@ def read_task_state(project, slug):
         return None
 
 
+def worker_progressed(worker):
+    """External-fact gate for a DONE claim (B1, anti-reward-hacking / anti-Goodhart P6).
+
+    A worker's STATE.md=DONE is trusted ONLY if the WORLD shows real forward motion since
+    the worker started: a git commit newer than its `started_epoch`, or a changed/created
+    artifact in the project (dirty tree beyond our own orc-managed files). This is the same
+    `external_progress` oracle the watchdog already uses -- now wired into the completion
+    path, which is exactly the moment a reward-hacking worker would lie (brief G1 / the
+    Replit-class incident named in the brief). No external fact -> the DONE is NOT taken.
+
+    Returns True if an external fact backs the claim. A missing project/started_epoch is
+    treated as "no fact" (fail-closed: better to park a real DONE for inspection than to
+    auto-close a fake one).
+    """
+    from . import watchdog
+    project = worker.get("project")
+    started = worker.get("started_epoch")
+    if not project or started is None:
+        return False
+    return watchdog.external_progress(project, since_epoch=float(started))
+
+
 def poll_completions(state, hub, cfg=None):
     """Detect finished tasks by polling their STATE.md and close the loop (F14).
 
     For each active worker: read its task STATE.md; on a terminal status ->
-      - done: `bd close`, mark_done in shift.json, close the worker's window (F15 backend);
+      - done (WITH an external fact): `bd close`, mark_done in shift.json, close the
+        worker's window (F15 backend);
+      - done (WITHOUT an external fact): NOT closed -- parked "suspected fake-done" and
+        the worker window kept, so a worker cannot close a task by merely writing DONE
+        (B1 reward-hacking gate; brief G1 "DONE confirmed by external facts");
       - gate: `bd` blocked (park), mark_parked (waiting-on-you), window KEPT for the
         operator to answer the live gate (F9 owns the notification).
     bd is the truth about tasks; on a bd error we still repair shift.json so the newspaper
@@ -132,6 +158,15 @@ def poll_completions(state, hub, cfg=None):
         text = read_task_state(project, slug)
         status = detect_terminal_status(text)
         if status == "done":
+            # B1: a DONE claim is honored ONLY with an external fact (fresh commit /
+            # changed artifact since the worker started). Otherwise it is a suspected
+            # fake-done: do NOT close the bd task, do NOT record it done -- park it,
+            # keep the worker window, and surface it in the newspaper for inspection.
+            if not worker_progressed(w):
+                _safe_block(hub, task_id)
+                shiftmod.mark_parked(state, task_id, S.PARK_SUSPECTED_FAKE_DONE)
+                transitions.append((task_id, "suspected-fake-done"))
+                continue
             _safe_close(hub, task_id)
             # per-task spend attribution (F6): tokens consumed = ccusage total at close
             # minus the total captured at claim. On this 1-worker machine one worker runs
@@ -555,6 +590,18 @@ def spawn_one(cfg, hub, state, task):
         beads.set_status(hub, task_id, "open")
         shiftmod.mark_parked(state, task_id, reason)
         return False, reason, state
+
+    # P5 fail-closed: the OS-sandbox is the PRIMARY wall of an unattended shift. If it would
+    # NOT be applied (seatbelt unavailable, or sandbox disabled without an explicit opt-out)
+    # REFUSE to spawn -- do not run a worker with no wall (fail-open). Checked before claim.
+    from . import sandbox as sandboxmod
+    sb_ok, sb_reason = sandboxmod.sandbox_gate(cfg)
+    if not sb_ok:
+        reason = (S.PARK_SANDBOX_UNAVAILABLE if sb_reason == "unavailable"
+                  else S.PARK_SANDBOX_DISABLED)
+        beads.set_status(hub, task_id, "open")
+        shiftmod.mark_parked(state, task_id, reason)
+        return False, "sandbox-fail-closed: %s" % sb_reason, state
 
     # shift budget cap (F6): once the shift's total token spend is over the cap, do not
     # start new tasks (protect the weekly pool). Checked before admission/claim.

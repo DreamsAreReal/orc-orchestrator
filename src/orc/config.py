@@ -51,6 +51,12 @@ DEFAULTS = {
     # user seatbelt -- see the spike). Default OFF: workers need the claude API / git fetch /
     # brew; git push stays blocked by the F1 hook. Turn on for locked-down runs.
     "sandbox_deny_network": False,
+    # P5: fail-CLOSED on the sandbox. The seatbelt sandbox is the PRIMARY wall; if it would
+    # NOT be applied (sandbox-exec unavailable, or sandbox=false) orc REFUSES to spawn an
+    # unsupervised worker rather than running it wall-less (fail-open). Set this True to
+    # deliberately run without the sandbox (recorded, not recommended). Default False =
+    # the wall must be present for an unattended shift.
+    "allow_no_sandbox": False,
     "task_token_cap": 0,           # 0 = unlimited (F6 overrides)
     "shift_token_cap": 0,          # 0 = unlimited (F6)
     "notify": "macos",             # notification channel (F9)

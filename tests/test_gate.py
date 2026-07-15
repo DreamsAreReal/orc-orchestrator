@@ -79,6 +79,36 @@ def test_gate_card_no_irreversible_marker_when_reversible(monkeypatch):
     assert "необратимое" not in card
 
 
+def test_gate_card_degrades_on_bd_error(monkeypatch):
+    """P8: bd unavailable at render time -> the gate card degrades (id + reason + note)
+    instead of raising BeadsError."""
+    def _boom(hub, tid):
+        raise report.beads.BeadsError("bd not found")
+    monkeypatch.setattr(report.beads, "show", _boom)
+    card = report._gate_card("hub", {"task": "g1", "reason": "waiting on you"})
+    assert "g1" in card
+    assert "waiting on you" in card
+    assert "bd" in card                          # the degradation note names the cause
+
+
+def test_newspaper_degrades_on_bd_error_not_crash(monkeypatch):
+    """P8: the whole newspaper must NOT crash when bd is down while a gate is parked --
+    the signature morning digest prints what it can and flags the unavailable detail."""
+    def _boom(hub, tid):
+        raise report.beads.BeadsError("bd down")
+    monkeypatch.setattr(report.beads, "show", _boom)
+    monkeypatch.setattr(report.probes, "ccusage_window",
+                        lambda: {"active": True, "remaining_minutes": 100})
+    state = shiftmod._empty()
+    shiftmod.mark_parked(state, "g1", "waiting on you")
+    shiftmod.mark_done(state, "t2", kind="done", spent=None)
+    # must not raise; summary + done row + degraded gate card all present
+    out = report.newspaper(state, "bad-hub")
+    assert "g1" in out                            # gate still listed
+    assert "t2" in out                            # completed task still shown
+    assert S.RU_REPORT_TITLE in out               # newspaper rendered end-to-end
+
+
 # --------------------------------------------------------------------------- #
 # poll_completions gate branch: park + notify + keep window
 # --------------------------------------------------------------------------- #

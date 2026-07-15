@@ -22,26 +22,21 @@ generated profile: /private/tmp/orc-f13-ws.84e5dw/.orc/sandbox.sb
 
 === A direct rm outside ws ===
   inner : rm -f '/Users/admin/orc-f13-probe-out/sentinel.txt'
-rm: /Users/admin/orc-f13-probe-out/sentinel.txt: Operation not permitted
   RESULT: sentinel SURVIVED -> direct rm BLOCKED by OS-sandbox [ok]
 === B base64|bash rm outside ws ===
   inner : echo 'cm0gLWYgJy9Vc2Vycy9hZG1pbi9vcmMtZjEzLXByb2JlLW91dC9zZW50aW5lbC50eHQn' | base64 -d | bash
-rm: /Users/admin/orc-f13-probe-out/sentinel.txt: Operation not permitted
   RESULT: sentinel SURVIVED -> base64|bash rm BLOCKED by OS-sandbox [ok]
 === C python shutil.rmtree outside ws ===
   inner : python3 -c "import shutil; shutil.rmtree('/Users/admin/orc-f13-probe-out', ignore_errors=True)"
   RESULT: sentinel SURVIVED -> python shutil.rmtree BLOCKED by OS-sandbox [ok]
 === D find outside ws -delete ===
   inner : find '/Users/admin/orc-f13-probe-out' -name 'sentinel.txt' -delete
-find: -delete: unlink(/Users/admin/orc-f13-probe-out/sentinel.txt): Operation not permitted
   RESULT: sentinel SURVIVED -> find -delete BLOCKED by OS-sandbox [ok]
 === E xargs rm outside ws ===
   inner : echo '/Users/admin/orc-f13-probe-out/sentinel.txt' | xargs rm -f
-rm: /Users/admin/orc-f13-probe-out/sentinel.txt: Operation not permitted
   RESULT: sentinel SURVIVED -> xargs rm BLOCKED by OS-sandbox [ok]
 === F write to ~/.ssh outside ws ===
   inner : echo pwned > '/Users/admin/.ssh/orc_f13_probe'
-bash: /Users/admin/.ssh/orc_f13_probe: Operation not permitted
   RESULT: ~/.ssh write BLOCKED by OS-sandbox [ok]
 === control write inside ws ===
   inner : echo ok > '/tmp/orc-f13-ws.84e5dw/inside.txt'

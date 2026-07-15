@@ -313,22 +313,69 @@ def stripped_env(base_env=None, denylist=None):
     return env, removed
 
 
-# Git-push capability removal (G0c). The F1 PreToolUse hook blocks the literal
+def secret_denylist(extra=None):
+    """The effective secret env-var denylist (built-in patterns + config extras)."""
+    return list(DEFAULT_SECRET_DENYLIST) + list(extra or [])
+
+
+def secret_var_names(base_env=None, denylist=None):
+    """Concrete env-var NAMES in `base_env` that match the secret denylist (sorted).
+
+    Resolves the regex denylist against the actual environment so the spawn command can
+    `unset` exactly the secret vars present, not the patterns. Never includes vars that are
+    absent -- unset of a missing var is harmless but we keep the list tight.
+    """
+    env = dict(base_env if base_env is not None else os.environ)
+    patterns = [re.compile(p) for p in (denylist or DEFAULT_SECRET_DENYLIST)]
+    return sorted(k for k in env if any(p.match(k) for p in patterns))
+
+
+def unset_secrets_export_prefix(base_env=None, denylist=None):
+    """Shell `unset VAR ...;` prefix that removes secret env vars for the worker tree (P3).
+
+    Applied ahead of the worker's inner spawn command so prod credentials passed to the
+    dispatcher's environment (ANTHROPIC_API_KEY, AWS_*, *_SECRET, *_TOKEN, GITHUB_TOKEN,
+    ...) are UNREACHABLE by the worker and every child it spawns -- the "env cleared by
+    construction" guarantee the brief requires, enforced on the ACTUAL spawn path (not only
+    in a printed counter). NB: this touches only ENVIRONMENT variables; the claude OAuth
+    token lives in the macOS Keychain (a different mechanism) and is deliberately left
+    intact so the worker can authenticate. Returns "" if no secret var is present.
+    """
+    names = secret_var_names(base_env=base_env, denylist=denylist)
+    if not names:
+        return ""
+    import shlex as _shlex
+    return "unset %s; " % " ".join(_shlex.quote(n) for n in names)
+
+
+# Git-push capability removal (G0c + B2). The F1 PreToolUse hook blocks the literal
 # `git push` token but is bypassed by obfuscation (base64|bash), and the F13 seatbelt
 # sandbox only confines FILE WRITES (network stays on so the worker can reach the claude
 # API / git fetch / brew). So an obfuscated `git push` would otherwise authenticate via
-# the macOS Keychain (credential.helper=osxkeychain) and reach the remote. These env vars
-# remove the push CAPABILITY at its root: no credential can be supplied to any git process
-# in the worker's tree, so a push fails by auth regardless of how it is reached. Proven by
-# spike (docs/evidence/F13-push/): obfuscated push -> "could not read Username: terminal
-# prompts disabled", exit 128, nothing pushed.
+# the macOS Keychain (credential.helper=osxkeychain, HTTPS) OR the ~/.ssh key (SSH remote)
+# and reach the remote. These env vars remove the push CAPABILITY at its root for BOTH
+# transports: no credential can be supplied to any git process in the worker's tree, so a
+# push fails by auth regardless of how it is reached.
+#   HTTPS: GIT_TERMINAL_PROMPT=0 + GIT_ASKPASS=false + empty credential.helper.
+#   SSH  : GIT_SSH_COMMAND/GIT_SSH=/usr/bin/false so `git push git@host:...` cannot invoke
+#          ssh at all, and SSH_AUTH_SOCK="" detaches any ssh-agent so no agent key is
+#          offered. (B2: E3 proved an obfuscated SSH push authenticated to github with the
+#          worker's ~/.ssh key -- the HTTPS-only wall did not cover the SSH transport.)
+# Proven by spike (docs/evidence/F13-push/ + docs/evidence/fix1/): obfuscated HTTPS push
+# -> "could not read Username: terminal prompts disabled"; obfuscated SSH push -> ssh
+# replaced by /usr/bin/false, no key offered; exit != 0, nothing pushed.
 PUSH_NEUTRALIZING_GIT_ENV = {
     "GIT_TERMINAL_PROMPT": "0",       # never prompt for a username/password interactively
     "GIT_ASKPASS": "/usr/bin/false",  # any askpass call fails -> no password is ever supplied
     "GIT_CONFIG_NOSYSTEM": "1",       # ignore /etc/gitconfig credential helpers
-    "GIT_CONFIG_COUNT": "1",          # inject one inline config pair (below):
+    "GIT_SSH_COMMAND": "/usr/bin/false",  # git's ssh transport cannot run -> no SSH push
+    "GIT_SSH": "/usr/bin/false",          # older git ssh var -> same, no SSH push
+    "SSH_AUTH_SOCK": "",              # detach any ssh-agent -> no agent key is offered
+    "GIT_CONFIG_COUNT": "2",          # inject inline config pairs (below):
     "GIT_CONFIG_KEY_0": "credential.helper",
     "GIT_CONFIG_VALUE_0": "",         # empty -> disables the osxkeychain helper for this tree
+    "GIT_CONFIG_KEY_1": "core.sshCommand",
+    "GIT_CONFIG_VALUE_1": "/usr/bin/false",  # belt-and-braces: config-level ssh disabled too
 }
 
 

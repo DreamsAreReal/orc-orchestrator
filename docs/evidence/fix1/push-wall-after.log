@@ -1,0 +1,21 @@
+=== F13-push: git-push capability removed from the worker (G0c) ===
+remote (not owned): https://github.com/orc-spike-nonexistent-9f3a/private-repo.git
+
+--- (a) BASELINE: obfuscated push under NORMAL env (must reach authenticated remote) ---
+exit=128
+  | remote: Repository not found.
+  | fatal: repository 'https://github.com/orc-spike-nonexistent-9f3a/private-repo.git/' not found
+  BASELINE reached an AUTHENTICATED channel (keychain supplied creds; repo just doesn't exist)
+  => the push capability IS present without the wall (wall is load-bearing).
+
+--- (b) WALLED: same obfuscated push under the WORKER env (must fail by auth) ---
+exit=128
+  | error: unable to read askpass response from '/usr/bin/false'
+  | fatal: could not read Username for 'https://github.com': terminal prompts disabled
+  WALL HELD: obfuscated push blocked by missing credential (auth), nothing pushed
+  sentinel NOT pushed (no object transfer attempted past auth)
+
+--- credential.helper visible to a git process in the worker env? ---
+  git config credential.helper under worker env: command line:	
+
+=== F13-push PASS (worker git-push capability removed; obfuscated push fails by auth) ===

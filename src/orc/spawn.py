@@ -99,12 +99,21 @@ def build_start_command(project, claude_bin, prompt, session=None, cfg=None):
     does not hinge on live-model latency or an exhausted usage window. Not used in real
     shifts (the dispatcher always passes a claude prompt).
     """
-    # G0c: strip git-push credentials from the worker's environment so an obfuscated
-    # `git push` (which bypasses the F1 pattern-hook, and which the F13 file-write sandbox
-    # does not stop because network is on) fails by auth -- no credential can be supplied
-    # to any git process in the worker tree. Always applied (real shifts have no legitimate
-    # push; approved pushes go through the operator, not an unsupervised worker).
-    prefix = worker_walls.push_neutralizing_export_prefix()
+    # P3: strip secret env vars (ANTHROPIC_API_KEY, AWS_*, *_SECRET, *_TOKEN, GITHUB_TOKEN,
+    # ... per the config denylist) from the worker's environment on the ACTUAL spawn path,
+    # so prod credentials are unreachable by the worker and every child it spawns ("env
+    # cleared by construction", brief sandbox-boundaries section). NB: only ENV VARS are
+    # removed; the claude OAuth token lives in the macOS Keychain (a separate mechanism) and
+    # stays intact so the worker can still authenticate. Runs FIRST, before anything the
+    # worker touches.
+    denylist = worker_walls.secret_denylist((cfg or {}).get("secret_denylist_extra"))
+    prefix = worker_walls.unset_secrets_export_prefix(denylist=denylist)
+    # G0c + B2: strip git-push credentials (HTTPS + SSH) from the worker's environment so an
+    # obfuscated `git push` (which bypasses the F1 pattern-hook, and which the F13 file-write
+    # sandbox does not stop because network is on) fails by auth -- no credential can be
+    # supplied to any git process in the worker tree. Always applied (real shifts have no
+    # legitimate push; approved pushes go through the operator, not an unsupervised worker).
+    prefix += worker_walls.push_neutralizing_export_prefix()
     if session:
         prefix += "export ORC_SESSION=%s; " % shlex.quote(str(session))
     override = os.environ.get("ORC_SPAWN_CMD_OVERRIDE")

@@ -119,7 +119,7 @@ def test_spawn_one_refuses_when_shift_cap_reached(tmp_path, monkeypatch):
     subprocess.run(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t",
                     "commit", "-q", "-m", "i"], check=True)
     cfg = {"claude_bin": "/bin/true", "mcp_allowlist": [], "shift_token_cap": 1000,
-           "min_free_ram_mb": 400, "min_window_minutes": 5}
+           "min_free_ram_mb": 400, "min_window_minutes": 5, "allow_no_sandbox": True}
     state = shiftmod._empty()
     state["done"] = [{"task": "prev", "spent": 5000}]   # already over the shift cap
     claimed = []

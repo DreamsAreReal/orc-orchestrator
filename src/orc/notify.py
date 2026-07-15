@@ -60,6 +60,25 @@ def notify_macos(title, message, subtitle=None, sound=None):
         return False
 
 
+def notify_canary_fail(cfg, failed_checks):
+    """Fire the "the shift did NOT start (canary failed)" notification (G7).
+
+    `failed_checks` is a list of failed check names. Channel from cfg['notify'] (default
+    macos). Returns True if delivered. In unattended mode this is the only signal the
+    operator gets that the morning shift never started (the newspaper cannot catch up --
+    there is no shift). Never raises.
+    """
+    from . import strings as S
+    channel = (cfg or {}).get("notify", "macos")
+    checks = ", ".join(failed_checks) if failed_checks else "-"
+    n_title = S.NOTIFY_CANARY_TITLE
+    n_msg = S.NOTIFY_CANARY_BODY.format(n=len(failed_checks), checks=checks)
+    n_sub = S.NOTIFY_CANARY_SUBTITLE.format(checks=checks)
+    if channel == "macos":
+        return notify_macos(n_title, n_msg, subtitle=n_sub, sound="Basso")
+    return False
+
+
 def notify_gate(cfg, task_id, title, scope):
     """Fire the "a task reached a gate, it is waiting for you" notification (F9).
 

@@ -259,6 +259,19 @@ def test_push_neutralizing_env_disables_credentials():
     assert W.push_neutralizing_git_env()["GIT_TERMINAL_PROMPT"] == "0"
 
 
+def test_push_neutralizing_env_disables_ssh_transport():
+    # B2: the SSH git-push transport is neutralized too (HTTPS-only wall was bypassed by an
+    # obfuscated SSH push authenticating with the worker's ~/.ssh key -- E3 live breach).
+    env = W.push_neutralizing_git_env()
+    assert env["GIT_SSH_COMMAND"] == "/usr/bin/false"   # git's ssh transport cannot run
+    assert env["GIT_SSH"] == "/usr/bin/false"           # older git ssh var
+    assert env["SSH_AUTH_SOCK"] == ""                    # ssh-agent detached, no key offered
+    # inline config also disables core.sshCommand (belt-and-braces)
+    keys = {env["GIT_CONFIG_KEY_0"], env["GIT_CONFIG_KEY_1"]}
+    assert "core.sshCommand" in keys
+    assert env["GIT_CONFIG_COUNT"] == "2"
+
+
 def test_push_neutralizing_prefix_shell_shape():
     pfx = W.push_neutralizing_export_prefix()
     for k in ("GIT_TERMINAL_PROMPT", "GIT_ASKPASS", "GIT_CONFIG_NOSYSTEM",
@@ -291,3 +304,41 @@ def test_worker_env_git_config_disables_keychain(tmp_path):
                        capture_output=True, text=True)
     # value is empty (helper disabled); no 'osxkeychain' leaks through
     assert "osxkeychain" not in r.stdout.strip()
+
+
+def test_secret_var_names_matches_env(monkeypatch):
+    # P3: the denylist resolves concrete NAMES from the actual environment.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIA")
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_x")
+    monkeypatch.setenv("MY_SERVICE_SECRET", "y")
+    monkeypatch.setenv("PATH", "/usr/bin")   # non-secret, must NOT match
+    names = W.secret_var_names()
+    for k in ("ANTHROPIC_API_KEY", "AWS_ACCESS_KEY_ID", "GITHUB_TOKEN", "MY_SERVICE_SECRET"):
+        assert k in names
+    assert "PATH" not in names
+
+
+def test_start_command_unsets_secrets_on_spawn(tmp_path, monkeypatch):
+    # P3 (E2 gap): the SPAWN command itself must unset secret env vars, not merely count
+    # them in a printed report. Assert the emitted command carries the `unset` and that
+    # running it actually clears the secret from the worker's environment.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret-XYZ")
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_leakme")
+    from orc import spawn
+    cmd = spawn.build_start_command(str(tmp_path), "/bin/true", "x",
+                                    session="s1", cfg={"sandbox": False})
+    assert "unset " in cmd
+    assert "ANTHROPIC_API_KEY" in cmd
+    assert "GITHUB_TOKEN" in cmd
+    # the unset must run BEFORE the cd into the project (before any worker work)
+    assert cmd.index("unset ") < cmd.index("cd ")
+    # actually execute the export/unset prefix and prove the secret is gone
+    exports = cmd.split(" && ")[0]
+    r = subprocess.run(["bash", "-c", exports + '; echo "AK=[${ANTHROPIC_API_KEY:-CLEARED}]"'
+                        ' "GT=[${GITHUB_TOKEN:-CLEARED}]"'],
+                       capture_output=True, text=True)
+    assert "AK=[CLEARED]" in r.stdout
+    assert "GT=[CLEARED]" in r.stdout
+    assert "sk-secret-XYZ" not in r.stdout
+    assert "ghp_leakme" not in r.stdout

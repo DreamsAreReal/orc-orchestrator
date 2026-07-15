@@ -67,6 +67,29 @@ REVALIDATE_NOTE = (
     "approved (rev {rev}); the plan may be stale — confirm scope before building."
 )
 PARK_ON_GATE = "task reached a gate; waiting for your answer (see the gate card)"
+# Sandbox fail-closed (P5): the OS-sandbox is the PRIMARY wall. If it is enabled but the
+# machine has no `sandbox-exec` (unavailable), or it is disabled without an explicit
+# operator opt-out, orc REFUSES to spawn an unsupervised worker rather than running it with
+# no wall (fail-open). Set allow_no_sandbox=true in config to run without it deliberately.
+PARK_SANDBOX_UNAVAILABLE = (
+    "parked: OS-sandbox (seatbelt) is unavailable on this machine but the sandbox wall is "
+    "required. Refusing to spawn an unsupervised worker without its primary wall. "
+    "Install sandbox-exec or set allow_no_sandbox=true to run without it (not recommended)."
+)
+PARK_SANDBOX_DISABLED = (
+    "parked: the OS-sandbox is disabled (sandbox=false) but allow_no_sandbox is not set. "
+    "Refusing to spawn an unsupervised worker without its primary wall. "
+    "Set allow_no_sandbox=true to run without the sandbox deliberately."
+)
+# Anti-reward-hacking (B1): a worker wrote DONE in STATE.md but left NO external fact
+# (no new git commit, no changed/created artifact since it started). DONE is confirmed by
+# facts in the world, never by the worker's self-report (brief G1 / Replit-class risk).
+PARK_SUSPECTED_FAKE_DONE = (
+    "parked: worker claims DONE but produced NO external fact "
+    "(no new commit, no changed/created artifact since it started). "
+    "Suspected fake-done -- inspect before trusting; DONE is confirmed by the world, "
+    "not the worker's self-report."
+)
 
 # --- admission / back-pressure (F5) reasons (en; operator terminal) ---
 PARK_LOW_RAM = (
@@ -133,6 +156,12 @@ RU_SPEND_SUFFIX = "  ~{spent} ток."
 RU_ROW_FAILED = "  ✗ {id}  упало: {reason}"
 RU_POOL_LINE = "  пул: {pct}% окна, {mins_left} мин осталось, RAM {ram}"
 RU_SECTION_GATES = "── ждут твоего решения ──"
+# Shown in place of a gate card's rich detail when bd is transiently unavailable: the
+# newspaper degrades (prints what it can) instead of crashing (P8).
+RU_GATE_CARD_DEGRADED = (
+    "  ⏸ {id} — ждёт тебя: {reason}\n"
+    "     (детали задачи временно недоступны: очередь bd не отвечает)"
+)
 RU_SECTION_RUNNING = "── в работе ──"
 RU_SECTION_DONE = "── завершено ──"
 RU_GATE_CARD = (
@@ -152,6 +181,14 @@ RU_GATE_IRREVERSIBLE = (
 NOTIFY_GATE_TITLE = "orc: задача ждёт твоего решения"
 NOTIFY_GATE_BODY = "{id} — {title}. Открой газету (`orc status --newspaper`)."
 NOTIFY_GATE_SUBTITLE = "гейт: {scope}"
+
+# --- G7 canary-fail notification (ru; user-facing macOS notification) ---
+# The whole point of the canary is "the shift silently did not start this morning and you
+# don't know". On a canary failure we PUSH a notification so the operator finds out even
+# in unattended mode (the newspaper won't catch up -- there is no shift).
+NOTIFY_CANARY_TITLE = "orc: смена НЕ стартовала"
+NOTIFY_CANARY_BODY = "канарейка упала ({n} провал(ов)): {checks}. Смена не запущена."
+NOTIFY_CANARY_SUBTITLE = "проверь: {checks}"
 
 # --- F10: LaunchAgent install / kill switch / setup (en; operator terminal) ---
 LA_INSTALLED = "LaunchAgent installed and bootstrapped: {label} (plist {path})"

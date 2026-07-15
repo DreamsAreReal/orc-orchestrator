@@ -1,0 +1,3 @@
+P9: .env ignored
+.env
+.env.production

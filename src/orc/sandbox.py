@@ -22,6 +22,28 @@ def sandbox_available():
     return os.path.exists("/usr/bin/sandbox-exec")
 
 
+def sandbox_gate(cfg):
+    """Fail-closed spawn gate for the OS-sandbox (P5). Returns (ok, reason_key).
+
+    The seatbelt sandbox is the PRIMARY wall of an unattended shift. If it would NOT be in
+    effect, orc must REFUSE to spawn rather than run a worker with no wall (fail-open):
+      - sandbox enabled (default) but `sandbox-exec` missing -> refuse ("unavailable");
+      - sandbox explicitly disabled without allow_no_sandbox -> refuse ("disabled").
+    An operator may set allow_no_sandbox=true to run deliberately without it (recorded).
+    Returns ok=True with reason_key=None when the sandbox will be applied (or an explicit
+    opt-out is set). reason_key is one of "unavailable" / "disabled" for the caller to map
+    to an operator-facing park string.
+    """
+    cfg = cfg or {}
+    if cfg.get("allow_no_sandbox"):
+        return True, None                    # explicit, recorded opt-out
+    if not cfg.get("sandbox", True):
+        return False, "disabled"             # sandbox off but no opt-out -> refuse
+    if not sandbox_available():
+        return False, "unavailable"          # sandbox required but seatbelt missing -> refuse
+    return True, None
+
+
 def _sb_quote(path):
     """Quote a path for a seatbelt profile string literal (double-quote context)."""
     return path.replace("\\", "\\\\").replace('"', '\\"')
@@ -100,6 +122,15 @@ def build_profile(workspace, extra_write_subpaths=None, deny_network=False):
         '(allow file-write*',
         '  (subpath "%s"))' % _sb_quote(ws),
     ]
+    # B2: deny READING ~/.ssh at the syscall level. The profile is otherwise read-allow-
+    # default (workers need to read brew/node/claude runtime), so an obfuscated reader
+    # (`python3 -c "open('~/.ssh/id_ed25519').read()"`) would exfiltrate the private key
+    # past the F1 pattern-hook. This deny stops the read no matter how it is reached, so
+    # the key cannot be lifted for an SSH push / attacker-host exfil (E3 breach). The env
+    # SSH-neutralization (worker_walls) removes the push capability; this removes the key
+    # readability -- defense in depth.
+    ssh_dir = os.path.join(os.path.expanduser("~"), ".ssh")
+    lines.append('(deny file-read* (subpath "%s"))' % _sb_quote(os.path.realpath(ssh_dir)))
     runtime = list(_claude_runtime_writes()) + list(extra_write_subpaths or [])
     seen = {ws}
     for p in runtime:

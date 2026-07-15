@@ -1,0 +1,9 @@
+collecting ... collected 2 items
+
+tests/test_cli.py::test_start_json_is_pure_json_on_canary_fail PASSED    [ 50%]
+tests/test_cli.py::test_start_notifies_on_canary_fail PASSED             [100%]
+
+============================== 2 passed in 8.83s ===============================
+=== P7 live: orc start --json stdout is pure JSON (json.tool parses) ===
+=== P6 live: notification composed on canary-fail ===
+display notification "канарейка упала (1 провал(ов)): auth. Смена не запущена." with title "orc: смена НЕ стартовала" subtitle "проверь: auth" sound name "Basso"

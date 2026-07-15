@@ -48,6 +48,29 @@ def test_profile_deny_network_when_requested(tmp_path):
     assert "(deny network*)" in prof
 
 
+def test_sandbox_gate_fail_closed(monkeypatch):
+    # P5: the gate refuses when the sandbox would not be applied, allows when it will be
+    # (or an explicit opt-out is set).
+    monkeypatch.setattr(sandbox, "sandbox_available", lambda: True)
+    assert sandbox.sandbox_gate({"sandbox": True}) == (True, None)          # applied
+    monkeypatch.setattr(sandbox, "sandbox_available", lambda: False)
+    assert sandbox.sandbox_gate({"sandbox": True}) == (False, "unavailable")  # missing seatbelt
+    assert sandbox.sandbox_gate({"sandbox": False}) == (False, "disabled")    # off, no opt-out
+    # explicit operator opt-out -> allowed even with no seatbelt
+    assert sandbox.sandbox_gate({"sandbox": False, "allow_no_sandbox": True}) == (True, None)
+    assert sandbox.sandbox_gate({"sandbox": True, "allow_no_sandbox": True}) == (True, None)
+
+
+def test_profile_denies_reading_ssh(tmp_path):
+    # B2: the profile denies READING ~/.ssh at the syscall level so an obfuscated reader
+    # cannot exfiltrate the private key (the profile is otherwise read-allow-default).
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws)
+    prof = sandbox.build_profile(ws)
+    ssh_real = os.path.realpath(os.path.join(os.path.expanduser("~"), ".ssh"))
+    assert '(deny file-read* (subpath "%s"))' % ssh_real in prof
+
+
 def test_extra_write_subpaths_are_scoped(tmp_path):
     ws = str(tmp_path / "ws")
     extra = str(tmp_path / "cache")
