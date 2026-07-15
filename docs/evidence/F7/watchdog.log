@@ -1,6 +1,6 @@
 === F7 watchdog: loop / silence / false-kill guard / bounded recovery ===
-date: Wed Jul 15 07:22:46 +04 2026
-orc_home: /tmp/orc-wd-home.Y7E2NQ
+date: Wed Jul 15 07:49:48 +04 2026
+orc_home: /tmp/orc-wd-home.d8oH0I
 
 1) LOOP verdict: loop -> PASS
 2) SILENCE verdict: silence -> PASS
