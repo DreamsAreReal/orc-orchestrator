@@ -120,6 +120,45 @@ def test_write_inside_workspace_allowed(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# P2: pipeline skill tree (~/.claude/skills) is READ-allowed, WRITE-denied.
+# A pipeline worker must run the FULL conveyor (references/, templates/, agents/, SKILL.md)
+# -- the first live run logged the references were unreachable. Reading is allowed; writing
+# stays workspace-only so a worker cannot edit its own conveyor.
+# --------------------------------------------------------------------------- #
+def test_read_pipeline_skill_reference_allowed(tmp_path):
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws)
+    ref = os.path.expanduser("~/.claude/skills/pipeline/references/phase-1-research.md")
+    # even though it is OUTSIDE the workspace, the skill tree is read-allowed for the worker
+    assert W._inspect_file_tool("Read", {"file_path": ref}, ws) is None
+
+
+def test_read_pipeline_skill_md_allowed(tmp_path):
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws)
+    skill = os.path.expanduser("~/.claude/skills/pipeline/SKILL.md")
+    assert W._inspect_file_tool("Read", {"file_path": skill}, ws) is None
+
+
+def test_read_other_outside_still_blocked(tmp_path):
+    # the read-allow is SCOPED to ~/.claude/skills: an arbitrary outside path still blocks
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws)
+    assert W._inspect_file_tool("Read", {"file_path": "/etc/hosts"}, ws) is not None
+
+
+def test_write_into_pipeline_skill_blocked(tmp_path):
+    # a worker may READ the conveyor but NEVER write it (cannot edit its own skill)
+    ws = str(tmp_path / "ws")
+    os.makedirs(ws)
+    skill = os.path.expanduser("~/.claude/skills/pipeline/SKILL.md")
+    reason = W._inspect_file_tool("Write", {"file_path": skill}, ws)
+    assert reason is not None and "outside" in reason.lower()
+    reason_edit = W._inspect_file_tool("Edit", {"file_path": skill}, ws)
+    assert reason_edit is not None
+
+
+# --------------------------------------------------------------------------- #
 # Generator: merge (not overwrite), env strip, MCP allowlist
 # --------------------------------------------------------------------------- #
 def test_generate_fresh_has_walls():

@@ -1,0 +1,10 @@
+profile: /private/var/folders/sf/ldf4zy1x0yd9431jnprl_zg00000gn/T/orc-refs-spike.hufzYw2mbT/.orc/sandbox.sb
+--- READ reference under sandbox (must succeed) ---
+# Фаза 1 — брейншторм + ресерч
+READ: OK (reference readable under sandbox)
+--- WRITE SKILL.md under sandbox (must be BLOCKED) ---
+WRITE: BLOCKED as expected -> bash: /Users/admin/.claude/skills/pipeline/SKILL.md: Operation not permitted
+INTEGRITY: SKILL.md unchanged
+--- F1 hook: Read reference allowed, /etc blocked, Write-into-skills blocked ---
+F1 HOOK: read-reference=allow, read-/etc=block, write-skills=block  OK
+P2 REFERENCES-SANDBOX PASS

@@ -157,10 +157,28 @@ def test_profile_does_not_allow_enforcement_paths(tmp_path):
     prof = sandbox.build_profile(str(tmp_path))
     home_claude = os.path.join(os.path.expanduser("~"), ".claude")
     # a worker must NOT be able to write its own walls: no broad ~/.claude allow, and none
-    # of the enforcement subpaths appear as an allowed subpath.
+    # of the enforcement subpaths appear as an ALLOWED write subpath.
     assert ('(subpath "%s"))' % home_claude) not in prof   # not the whole ~/.claude
     for enforce in ("/skills", "/agents", "/settings.json", "/CLAUDE.md"):
-        assert ('(subpath "%s%s")' % (home_claude, enforce)) not in prof
+        assert ('(allow file-write* (subpath "%s%s"))'
+                % (home_claude, enforce)) not in prof
+
+
+def test_profile_read_allows_skills_but_write_denies_them(tmp_path):
+    # P2: a pipeline worker must READ the FULL conveyor (~/.claude/skills: SKILL.md +
+    # references/ + templates/ + agents/) yet must never WRITE it. Reads are allow-default
+    # (no read-deny on skills, unlike ~/.ssh); the write-deny is EXPLICIT and last-wins.
+    prof = sandbox.build_profile(str(tmp_path))
+    skills = os.path.realpath(os.path.join(os.path.expanduser("~"), ".claude", "skills"))
+    # explicit write-deny present ...
+    assert ('(deny file-write* (subpath "%s"))' % skills) in prof
+    # ... and NOT write-allowed anywhere
+    assert ('(allow file-write* (subpath "%s"))' % skills) not in prof
+    # ... and NOT read-denied (worker may read the conveyor)
+    assert ('(deny file-read* (subpath "%s"))' % skills) not in prof
+    # the write-deny for skills must come AFTER the workspace/runtime allows (last rule wins)
+    assert prof.index('(deny file-write* (subpath "%s"))' % skills) > prof.index(
+        '(allow file-write*\n  (subpath "%s"))' % os.path.realpath(str(tmp_path)))
 
 
 def test_profile_runtime_paths_are_narrow_not_home(tmp_path):

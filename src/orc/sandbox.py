@@ -131,6 +131,15 @@ def build_profile(workspace, extra_write_subpaths=None, deny_network=False):
     # readability -- defense in depth.
     ssh_dir = os.path.join(os.path.expanduser("~"), ".ssh")
     lines.append('(deny file-read* (subpath "%s"))' % _sb_quote(os.path.realpath(ssh_dir)))
+    # P2-wave: the pipeline skill tree (~/.claude/skills) is READABLE by the worker (reads are
+    # allow-default; the F1 read-wall is opened for it so the worker runs the FULL conveyor --
+    # references/, templates/, agents/, SKILL.md). But it must stay UN-writable: a worker must
+    # never be able to edit its own conveyor. The write-deny already holds via the default
+    # `(deny file-write*)` (skills is not in the writable runtime subset), but we make it
+    # EXPLICIT so the wall is unmistakable and provable, and so a future extra_write_subpaths
+    # cannot accidentally re-open it (this deny is appended AFTER the workspace/runtime allows,
+    # and in seatbelt the LAST matching rule wins -> write stays denied).
+    skills_dir = os.path.join(os.path.expanduser("~"), ".claude", "skills")
     runtime = list(_claude_runtime_writes()) + list(extra_write_subpaths or [])
     seen = {ws}
     for p in runtime:
@@ -139,6 +148,11 @@ def build_profile(workspace, extra_write_subpaths=None, deny_network=False):
             continue
         seen.add(rp)
         lines.append('(allow file-write* (subpath "%s"))' % _sb_quote(rp))
+    # Explicit, last-wins write-deny for the pipeline skill tree (see note above): the worker
+    # may READ the conveyor but never WRITE it. Appended after the workspace/runtime allows so
+    # it overrides any accidental broad allow.
+    lines.append('(deny file-write* (subpath "%s"))'
+                 % _sb_quote(os.path.realpath(skills_dir)))
     # the shell/claude need these device sinks even under a write-deny profile
     lines.append(
         '(allow file-write-data '

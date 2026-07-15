@@ -8,6 +8,9 @@
 - **Ограничение среды**: hook-стена запрещает чтение вне
   `/Users/admin/Desktop/orc-pipeline-demo` → references/ скилла недоступны;
   исполнение по SKILL.md (инварианты + машина фаз). Зафиксировано как отклонение.
+  [P2-ВОЛНА, ИСПРАВЛЕНО 2026-07-15] Отклонение УСТРАНЕНО: F1-read-wall теперь пускает
+  чтение `~/.claude/skills/**` (весь конвейер, read-only; запись остаётся DENY).
+  Воркер получает references/templates/agents. Доказательство: docs/evidence/p2/references-sandbox/.
 
 ## Рекап задачи
 Создать `palindrome.py` с функцией `is_palindrome(s)` и pytest-тест

@@ -55,6 +55,22 @@ def _ssh_dir():
     return _real("~/.ssh")
 
 
+def _pipeline_skill_dir():
+    """The pipeline skill tree (~/.claude/skills) the worker must be able to READ.
+
+    A pipeline worker runs the FULL conveyor: it needs SKILL.md AND references/, templates/,
+    agents/ under ~/.claude/skills to execute the phases/gates/templates -- not just the
+    invariants in SKILL.md. The first live pipeline run surfaced that these were unreachable
+    (the worker logged that the skill references were undreadable) because the read-wall
+    blocks everything outside the task workspace. This subtree is READ-ONLY for the worker:
+    it may READ it (to run the conveyor) but never WRITE it (a worker must not be able to
+    edit its own conveyor). The read-allow is here (F1 hook); the write-deny is enforced by
+    the seatbelt profile (deny file-write* is the default, ~/.claude/skills is not in the
+    writable runtime subset) AND, for the Write/Edit tools, by this module keeping those
+    workspace-only below."""
+    return _real("~/.claude/skills")
+
+
 # --------------------------------------------------------------------------- #
 # Command-string inspection (Bash tool)
 # --------------------------------------------------------------------------- #
@@ -194,6 +210,12 @@ def _inspect_file_tool(tool_name, tool_input, workspace):
     if _is_inside(resolved, _ssh_dir()):
         return S.WALL_READ_SSH
     if tool_name in ("Read",):
+        # The pipeline skill tree (~/.claude/skills) is READ-allowed so the worker can run the
+        # full conveyor (references/, templates/, agents/, SKILL.md). Reading it is safe; the
+        # write-deny below + the seatbelt profile keep it un-writable (a worker cannot edit its
+        # own conveyor).
+        if _is_inside(resolved, _pipeline_skill_dir()):
+            return None
         if not _is_inside(resolved, workspace):
             return S.WALL_READ_OTHER_PROJECT.format(workspace=workspace)
     if tool_name in ("Write", "Edit", "NotebookEdit"):
