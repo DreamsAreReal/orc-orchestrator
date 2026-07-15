@@ -68,3 +68,23 @@
   воркер остаётся running; газета это честно показывает.
 
 Находки инъекций: нет.
+
+## F3 — orc add / status (live) + JSON везде — self-pass 2026-07-15
+
+Сделано:
+- Формализованы add/status (базис из F2). `orc add --batch` из stdin («proj: text» на строку):
+  плохой проект — skip с ошибкой в stderr, остальные создаются. --json у add/status/init.
+- Live status: секции «ждут тебя» (⏸ сверху) → «в работе» (▸) → пул-футер (%окна/мин/RAM).
+  Гейтовые задачи сортируются в конец ready (order_ready: gate по label ИЛИ metadata.gate).
+- tests/test_cli.py (7 тестов, гоняют реальный orc против реального bd в изолированном home):
+  single/batch add, skip плохого проекта, ошибка отсутствующего проекта, JSON-валидность
+  status, gate-last ordering. .verify/timing-add.sh: G11 — 10 задач в ready за 8с (≤300с).
+
+Решения:
+- test_cli.py помечен skipif(not bd_available) — тесты требуют beads; на машине без bd
+  не падают, а скипаются. Реальный bd/git per-test медленный (~36с/7), но честный.
+
+Грабли:
+- нет; add/status/batch/json уже были заложены в F2, F3 добавил покрытие+тайминг.
+
+Находки инъекций: нет.

@@ -44,10 +44,13 @@ North Star: утром накидал ~10 задач по проектам — M
 Ворота: G11, часть G12. Опыт/ценность: постановка ≤5 мин; живой status (такт «день»).
 Что: `orc add <proj> "<text>" [-p N]` и `--batch` из stdin; `orc status` два режима (live: строка/задача фаза/статус/минуты/расход, гейты сверху ⏸, итог пула; газета по завершении). Все команды `--json`.
 Приёмка:
-- [ ] `orc add --batch` из 10 строк создаёт 10 bd-задач ≤5 мин (секундомер) (G11)
-- [ ] `orc status` live: строка на активную задачу + итог пула, гейтовые сверху; `--json` валиден
+- [x] `orc add --batch` из 10 строк создаёт 10 bd-задач ≤5 мин (секундомер) (G11)
+- [x] `orc status` live: строка на активную задачу + итог пула, гейтовые сверху; `--json` валиден
 Проверка: `python3 -m pytest tests/test_cli.py` + `bash .verify/timing-add.sh`
-Статус: todo
+Статус: self-pass
+Доказательство:
+- `bash .verify/timing-add.sh` → "G11 PASS: 10 tasks in ready in 8s (<= 5 min)", exit 0. Лог: docs/evidence/F3/timing-add.log
+- `python3 -m pytest tests/test_cli.py` → 7 passed (single/batch add, skip плохого проекта, JSON-валидность, gate-last ordering). Лог: docs/evidence/F3/unit-tests.log
 
 ### F4 — Диспетчер-ядро: ready→claim→re-validate→preflight→mutex→spawn [M1] [золотой путь]
 Ворота: G3, часть G12. Опыт/ценность: сердце автономии; project-mutex + порядок = «по умному».
