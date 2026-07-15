@@ -8,7 +8,7 @@
 2. День: `orc status` — живая картина (строка/задача: фаза, статус, минуты, расход; ждущие гейта — сверху; итог пула внизу).
 3. Гейт: воркер дошёл до ТЗ-гейта → macOS-уведомление → **сессия ждёт живьём** (выбор пользователя); гейтовые задачи диспетчер держит В КОНЦЕ очереди, чтобы автономные прошли первыми.
 4. Итог: `orc status` (или авто по завершении смены) → **газета**: первый экран ≤150 слов, первой строкой сводка «7 DONE, 2 ждут, 1 упала; съедено 34% окна», ниже — гейт-карточки и пути.
-Signature = газета+canary: «проснулся, одна команда — полная картина ночной работы».
+Signature = газета+canary: «одна команда — полная картина работы смены» (v1 дневной; газета честно помечает срезанное/не-взятое).
 
 ## Архитектура
 Один процесс-диспетчер (python3-stdlib, демон в LaunchAgent) + тонкие bash-обёртки спавна. Состояние на диске (crash-safe): очередь = beads (`.beads/` в хабе), рантайм-состояние смены = `~/.orc/shift.json` (PID-реестр, lease, статусы), heartbeat = `~/.orc/hb/<session>.log`.
@@ -29,7 +29,9 @@ orc (python CLI)        add / status / start / stop
 - **workspace задачи**: `<проект>/docs/tasks/<слаг>/` — свой STATE.md/brief.md/features (двухслойность: продуктовый слой `<проект>/docs/` общий, patch-инвентарь RS-02).
 - **стартовый промпт** (шаблон, en): «Resume/başla pipeline task. Workspace: docs/tasks/<слаг>/. Product layer: docs/. Task: <текст>. Read docs/tasks/<слаг>/STATE.md if exists (resume), else phase 0.» → сессия вызывает скилл pipeline.
 - **heartbeat**: PostToolUse-хук воркера пишет `<ts> <tool> <arg-hash>`; PreToolUse-хук пишет маркер «tool-in-flight» → watchdog отличает работу от зависания.
-- **shift.json**: `{workers:[{pid,session,proj,task,phase,started,tokens}], parked:[...], done:[...]}` — источник правды рантайма; kill только по своим PID.
+- **shift.json**: `{workers:[{pid,session,proj,task,phase,started,tokens_before}], parked:[...], done:[...]}` — правда о ПРОЦЕССАХ; kill только по своим PID. **Арбитр рассинхрона: bd = правда о ЗАДАЧАХ, shift.json = правда о ПРОЦЕССАХ; при расхождении bd важнее — shift.json чинится по bd + живым PID (F4/F8).**
+- **settings.json воркера**: генератор МЕРЖИТ deny-набор в существующий `<проект>/.claude/settings.json` (пользовательские правила сохраняются), не overwrite (side-effect на продукт минимизирован; F1).
+- **per-задачный расход**: дельта `ccusage` total между claim и close (1 воркер → атрибуция точна; F6).
 - **admission**: `spawn if ready≠∅ and free_ram≥threshold and window_remaining≥min and no limit-string active`.
 
 ## Данные / состояние
@@ -45,5 +47,5 @@ orc (python CLI)        add / status / start / stop
 - E2E: `.verify/e2e-shift.sh` (2 orc-test проекта, 1 задача с гейтом; проверка bd-статусов, git-фактов, отсутствия дублей).
 - патчи конвейера: `~/.claude/skills/pipeline/bin/pipeline-lint.sh --doctor` + scorecard на старом и новом макете (характеризационный набор).
 
-## Открытые для ADR решения
-ADR-0001 стек (python-stdlib) · ADR-0002 конфиг-формат (JSON, т.к. tomllib нет в 3.9.6) · ADR-0003 deny-стены (после негативного спайка) · ADR-0004 гейт как bd-задача + сортировка в конец.
+## Принятые ADR
+ADR-0001 стек (python-stdlib, спайк stack.md) · ADR-0002 конфиг JSON (tomllib нет в 3.9.6) + гейт как bd-задача с сортировкой в конец. Deny-стены — фича F1 (негативный спайк = гейт входа), отдельный ADR не нужен.
