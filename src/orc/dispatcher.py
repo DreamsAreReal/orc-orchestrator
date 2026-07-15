@@ -131,7 +131,8 @@ def worker_progressed(worker):
     started = worker.get("started_epoch")
     if not project or started is None:
         return False
-    return watchdog.external_progress(project, since_epoch=float(started))
+    return watchdog.external_progress(project, since_epoch=float(started),
+                                      baseline_rev=worker.get("head_at_start"))
 
 
 def poll_completions(state, hub, cfg=None):
@@ -480,6 +481,25 @@ def record_revalidate_note(project, slug, note):
         return None
 
 
+def _dead_worker_finished(hub, worker):
+    """True if a dead worker's task is DONE on disk AND backed by an external fact.
+
+    Guards reconcile against requeuing a task that actually FINISHED between ticks (the
+    worker wrote DONE + committed and exited before the next poll). Only returns True on a
+    real, non-empty external fact -- a bare DONE with nothing produced is NOT finished (it
+    falls through to the lease and poll_completions parks it as suspected-fake-done, so the
+    B1 anti-reward-hacking wall stays intact)."""
+    task_id = worker.get("task")
+    project = worker.get("project")
+    slug = _worker_slug(hub, task_id, project)
+    if not (task_id and project and slug):
+        return False
+    text = read_task_state(project, slug)
+    if detect_terminal_status(text) != "done":
+        return False
+    return worker_progressed(worker)
+
+
 def reconcile(state, hub, cfg=None, now=None):
     """Arbiter for shift.json vs bd vs live PIDs (design.md + F8 recovery).
 
@@ -510,6 +530,18 @@ def reconcile(state, hub, cfg=None, now=None):
         repid = _reresolve_pid(w, now, lease_ttl)
         if repid is not None:
             w["pid"] = repid
+            alive.append(w)
+            continue
+        # Dead PID, but the task may have FINISHED between ticks: a worker can write its
+        # DONE STATE.md, produce its external fact (commit/artifact), and exit before the
+        # dispatcher next polls. Requeuing such a task via the lease would duplicate work
+        # and can wedge it (its commit now predates the re-spawn, so worker_progressed goes
+        # False forever). So: if the task's STATE.md shows a terminal DONE backed by a real
+        # external fact, KEEP the worker here so poll_completions (called right after
+        # reconcile in the daemon tick) closes it properly. This does NOT weaken the B1
+        # anti-reward-hacking wall: a dead worker with NO external fact still falls through
+        # to the lease/requeue below (and poll_completions parks it suspected-fake-done).
+        if _dead_worker_finished(hub, w):
             alive.append(w)
             continue
         # genuinely dead: return the task to ready (lease) unless bd already closed it.
@@ -653,6 +685,10 @@ def spawn_one(cfg, hub, state, task):
 
     prompt = start_prompt(project, slug, text)
     tokens_before = probes.total_tokens_now()
+    # Capture the repo HEAD at start so the external-fact gate can recognize a fast
+    # worker commit made in the SAME wall-clock second as the spawn while still excluding
+    # this pre-existing baseline (P2/3 boundary fix; %ct has 1-second resolution).
+    head_at_start = gitutil.head_rev(project) if gitutil.is_repo(project) else None
     # session = task_id: the worker's heartbeat hooks (F7) key their log/marker to this id
     # via ORC_SESSION, so the watchdog reads the same session the dispatcher spawned.
     # spawn_worker routes to the configured backend (F15): Ghostty (default, clean close)
@@ -677,5 +713,5 @@ def spawn_one(cfg, hub, state, task):
     pid = spawn.worker_pid(cfg, project, task_id, handle=tab_id)
     shiftmod.add_worker(state, pid=pid, session=task_id, project=project,
                         task=task_id, phase="build", tokens_before=tokens_before,
-                        tab_id=tab_id)
+                        tab_id=tab_id, head_at_start=head_at_start)
     return True, S.START_SPAWNED.format(id=task_id, project=project, tab=tab_id), state

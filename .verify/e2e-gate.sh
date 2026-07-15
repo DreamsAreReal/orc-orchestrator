@@ -119,7 +119,18 @@ log "--- newspaper gate card content ---"
 CARD="$("$ORC" status --newspaper 2>>"$LOG")"
 echo "$CARD" | tee -a "$LOG"
 CARD_OK=1
-echo "$CARD" | grep -q "docs/tasks/$SLUG/brief.md" || { log "  MISSING: brief path"; CARD_OK=0; }
+# The gate card truncates a long brief path to fit 80 cols (P1 cosmetic), eliding the
+# middle with an ellipsis: `.../docs/tasks/<...slug-tail>/brief.md`. So verify the brief
+# path is SHOWN robustly -- the full literal when it fits, else the `brief.md` tail plus
+# the (surviving) slug tail -- rather than grepping the full, possibly-elided path.
+if echo "$CARD" | grep -q "docs/tasks/$SLUG/brief.md"; then
+  :   # full path shown (short enough not to truncate)
+elif echo "$CARD" | grep -q "brief.md" \
+     && echo "$CARD" | grep -qE "$(printf '%s' "$SLUG" | tail -c 12)/brief.md"; then
+  :   # truncated path shown: brief.md under the (elided) task slug tail
+else
+  log "  MISSING: brief path"; CARD_OK=0
+fi
 echo "$CARD" | grep -q "broken code to real users" || { log "  MISSING: cost of error"; CARD_OK=0; }
 echo "$CARD" | grep -q "publish release v2" || { log "  MISSING: scope"; CARD_OK=0; }
 # irreversible marker (RU) present

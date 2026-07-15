@@ -7,10 +7,10 @@ file format and safe read/write only; reconciliation logic lives in the dispatch
 Format:
   {
     "started": <iso ts or null>,
-    "workers": [{"pid","tab_id","session","project","task","phase","started","tokens_before"}],
-    "parked":  [{"task","reason","ts"}],
-    "done":    [{"task","ts"}],
-    "failed":  [{"task","reason","ts"}],
+    "workers": [{"pid","tab_id","session","project","task","phase","started","started_epoch","tokens_before"}],
+    "parked":  [{"task","reason","ts","started","started_epoch","ended","ended_epoch"}],
+    "done":    [{"task","ts","kind","spent","started","started_epoch","ended","ended_epoch"}],
+    "failed":  [{"task","reason","ts","started","started_epoch","ended","ended_epoch"}],
     "window_pct_at_start": <int or null>,     # legacy, kept for back-compat (unused)
     "tokens_at_start": <int or null>,         # ccusage totalTokens captured at shift start
     "cost_at_start":   <float or null>        # ccusage costUSD captured at shift start
@@ -81,7 +81,7 @@ def start_shift(state, window_pct=None, tokens_at_start=None, cost_at_start=None
 
 
 def add_worker(state, pid, session, project, task, phase="build",
-               tokens_before=None, tab_id=None):
+               tokens_before=None, tab_id=None, head_at_start=None):
     state["workers"] = [w for w in state["workers"] if w.get("task") != task]
     state["workers"].append({
         "pid": pid,
@@ -93,6 +93,7 @@ def add_worker(state, pid, session, project, task, phase="build",
         "started": _now_iso(),
         "started_epoch": time.time(),
         "tokens_before": tokens_before,
+        "head_at_start": head_at_start,  # repo HEAD at spawn (B1 same-second boundary fix)
     })
     return state
 
@@ -102,26 +103,55 @@ def remove_worker(state, task):
     return state
 
 
+def _worker_interval(state, task):
+    """Extract a worker's activity interval (start ts/epoch) before it is removed.
+
+    Terminal records (done/parked/failed) carry the worker's `started`/`started_epoch`
+    plus an `ended`/`ended_epoch` (now). This makes the per-project serialization
+    auditable straight from shift.json: two tasks of the same project must have
+    NON-overlapping [started_epoch, ended_epoch] intervals (project-mutex, F4/G3).
+    Returns a dict of the interval fields (empty if the worker is not found)."""
+    for w in state.get("workers", []):
+        if w.get("task") == task:
+            return {
+                "started": w.get("started"),
+                "started_epoch": w.get("started_epoch"),
+                "ended": _now_iso(),
+                "ended_epoch": time.time(),
+            }
+    return {"ended": _now_iso(), "ended_epoch": time.time()}
+
+
 def mark_done(state, task, kind="done", spent=None):
     """Record a completed task. `kind` distinguishes DONE / DONE-WAVE-N (wave) / BETA so the
-    newspaper can show them differently (F6). `spent` is the per-task token spend (F6)."""
+    newspaper can show them differently (F6). `spent` is the per-task token spend (F6).
+    Carries the worker's activity interval so serialization is auditable (F4/G3)."""
+    interval = _worker_interval(state, task)
     remove_worker(state, task)
     if not any(d.get("task") == task for d in state["done"]):
-        state["done"].append({"task": task, "ts": _now_iso(), "kind": kind, "spent": spent})
+        rec = {"task": task, "ts": _now_iso(), "kind": kind, "spent": spent}
+        rec.update(interval)
+        state["done"].append(rec)
     return state
 
 
 def mark_parked(state, task, reason):
+    interval = _worker_interval(state, task)
     remove_worker(state, task)
     state["parked"] = [p for p in state["parked"] if p.get("task") != task]
-    state["parked"].append({"task": task, "reason": reason, "ts": _now_iso()})
+    rec = {"task": task, "reason": reason, "ts": _now_iso()}
+    rec.update(interval)
+    state["parked"].append(rec)
     return state
 
 
 def mark_failed(state, task, reason):
+    interval = _worker_interval(state, task)
     remove_worker(state, task)
     state["failed"] = [fl for fl in state["failed"] if fl.get("task") != task]
-    state["failed"].append({"task": task, "reason": reason, "ts": _now_iso()})
+    rec = {"task": task, "reason": reason, "ts": _now_iso()}
+    rec.update(interval)
+    state["failed"].append(rec)
     return state
 
 

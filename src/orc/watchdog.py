@@ -292,7 +292,7 @@ def classify(session, cfg, now=None, silence_seconds=120, busy=None):
 _ORC_MANAGED_PREFIXES = (".claude/", ".orc/", "docs/tasks/")
 
 
-def external_progress(project, since_epoch=None):
+def external_progress(project, since_epoch=None, baseline_rev=None):
     """Check REAL progress on disk, not the worker's self-report (design.md P6 / B1).
 
     Returns True ONLY on a genuine, non-empty deliverable produced after the worker started:
@@ -305,6 +305,10 @@ def external_progress(project, since_epoch=None):
     of a fact, not a fact -- exactly the reward-hacking bypass the reverify found. A worker
     that produced NO real content fails this -> its DONE is parked "suspected-fake-done",
     and (watchdog) a stuck worker that made no real change is safe to kill and restart.
+
+    `baseline_rev` is the repo HEAD captured when the worker started; passing it lets the
+    commit filter recognize a fast, same-second worker commit while still excluding the
+    pre-existing HEAD (P2/3 boundary fix -- see gitutil.commits_since).
     """
     from . import gitutil
     if not gitutil.is_repo(project):
@@ -312,7 +316,7 @@ def external_progress(project, since_epoch=None):
         return _recent_nonempty_file(project, since_epoch)
     # a commit after the worker started counts ONLY if it changed a real, non-empty file
     # (rejects --allow-empty and STATE.md-only commits).
-    for rev in gitutil.commits_since(project, since_epoch):
+    for rev in gitutil.commits_since(project, since_epoch, baseline_rev=baseline_rev):
         if gitutil.commit_touches_real_files(project, rev,
                                              exclude_prefixes=_ORC_MANAGED_PREFIXES):
             return True
@@ -395,7 +399,8 @@ def supervise(cfg, hub, state, project_progress=None, now=None,
         if project_progress is not None:
             progressing = project_progress.get(w.get("project"), False)
         else:
-            progressing = external_progress(w.get("project", ""), since_epoch=started)
+            progressing = external_progress(w.get("project", ""), since_epoch=started,
+                                            baseline_rev=w.get("head_at_start"))
         if progressing:
             actions.append({"task": w.get("task"), "verdict": verdict, "action": "spared"})
             continue

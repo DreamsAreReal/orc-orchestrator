@@ -61,6 +61,48 @@ def test_reconcile_dead_worker_returns_task_to_ready(monkeypatch):
     assert st["workers"] == []
 
 
+def test_reconcile_keeps_dead_worker_that_finished_between_ticks(monkeypatch):
+    """A worker that wrote DONE + produced an external fact and exited before the next poll
+    must NOT be requeued (that duplicates work and wedges the task); it is kept so
+    poll_completions closes it. Race fix for the scale E2E (P2/3)."""
+    st = shiftmod._empty()
+    st["workers"] = [{"pid": 999999, "task": "fin", "project": "/p", "tab_id": None,
+                      "session": "fin", "started_epoch": time.time() - 30}]
+    reopened = []
+    monkeypatch.setattr(dispatcher.beads, "reopen", lambda hub, tid: reopened.append(tid))
+    monkeypatch.setattr(dispatcher.beads, "show",
+                        lambda hub, tid: {"id": tid, "status": "in_progress",
+                                          "metadata": {"slug": "fin"}})
+    monkeypatch.setattr(dispatcher.spawn, "worker_pids", lambda p: [])
+    # STATE.md shows DONE and there IS a real external fact.
+    monkeypatch.setattr(dispatcher, "read_task_state", lambda proj, slug: "Status: DONE")
+    monkeypatch.setattr(dispatcher, "worker_progressed", lambda w: True)
+    st, dropped = dispatcher.reconcile(st, "hub", cfg={})
+    assert dropped == []                 # not requeued -- it finished
+    assert reopened == []
+    assert len(st["workers"]) == 1 and st["workers"][0]["task"] == "fin"
+
+
+def test_reconcile_requeues_dead_worker_with_done_but_no_fact(monkeypatch):
+    """B1 wall intact: a dead worker whose STATE.md says DONE but with NO external fact is
+    still requeued (and poll_completions will park it suspected-fake-done) -- the finished
+    fast-path does NOT trust a bare DONE."""
+    st = shiftmod._empty()
+    st["workers"] = [{"pid": 999999, "task": "fake", "project": "/p", "tab_id": None,
+                      "session": "fake", "started_epoch": time.time() - 30}]
+    reopened = []
+    monkeypatch.setattr(dispatcher.beads, "reopen", lambda hub, tid: reopened.append(tid))
+    monkeypatch.setattr(dispatcher.beads, "show",
+                        lambda hub, tid: {"id": tid, "status": "in_progress",
+                                          "metadata": {"slug": "fake"}})
+    monkeypatch.setattr(dispatcher.spawn, "worker_pids", lambda p: [])
+    monkeypatch.setattr(dispatcher, "read_task_state", lambda proj, slug: "Status: DONE")
+    monkeypatch.setattr(dispatcher, "worker_progressed", lambda w: False)  # no fact
+    st, dropped = dispatcher.reconcile(st, "hub", cfg={})
+    assert dropped == ["fake"] and reopened == ["fake"]   # requeued (wall holds)
+    assert st["workers"] == []
+
+
 def test_reconcile_is_idempotent(monkeypatch):
     st = shiftmod._empty()
     st["workers"] = [{"pid": 999999, "task": "t3", "project": "",

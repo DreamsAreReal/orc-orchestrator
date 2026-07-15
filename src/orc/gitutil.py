@@ -76,21 +76,36 @@ def product_layer_rev(repo, product_dir="docs"):
     return out.strip() if rc == 0 else None
 
 
-def commits_since(repo, since_epoch):
-    """Commit hashes (newest first) with a committer date STRICTLY after since_epoch.
+def commits_since(repo, since_epoch, baseline_rev=None):
+    """Commit hashes (newest first) made by the worker after it started (B1 external fact).
 
     Used by the reward-hacking external-fact gate (B1): a DONE claim needs a REAL commit
     made after the worker started -- but "a commit exists" is not enough, the commit must
     also carry a non-empty diff (see commit_touches_real_files). Returns [] on error.
 
-    We filter by committer timestamp (%ct) ourselves rather than trusting `git log --since`,
-    which is date-fuzzy and INCLUSIVE (it would return the baseline commit created in the
-    same second as since_epoch, whose real file would falsely pass the gate)."""
+    Boundary correctness (found by the P2/3 scale run): git's committer timestamp `%ct` has
+    only 1-second resolution, so a FAST worker whose commit lands in the SAME wall-clock
+    second as its start would be missed by a strict `%ct > since_epoch` filter -- the task
+    then wedges (a real, committed deliverable is never recognized). The fix keeps the B1
+    wall intact WITHOUT the off-by-one:
+      - if `baseline_rev` (the repo HEAD captured at worker start) is given, count any commit
+        with `%ct >= floor(since_epoch)` EXCEPT the baseline itself and its ancestors -- this
+        recognizes a same-second worker commit while still excluding the pre-existing HEAD
+        (the exact false-positive the strict filter was guarding against);
+      - if no baseline is given, fall back to the strict `%ct > since_epoch` behavior.
+    """
     if since_epoch is None:
         return []
     rc, out, _ = _git(repo, "log", "--format=%H %ct")
     if rc != 0:
         return []
+    # ancestors of the baseline HEAD (inclusive) existed before the worker started; exclude
+    # them so only NEW commits count, even at the same-second boundary.
+    baseline_set = set()
+    if baseline_rev:
+        rcb, outb, _ = _git(repo, "rev-list", baseline_rev)
+        if rcb == 0:
+            baseline_set = set(outb.split())
     result = []
     for line in out.splitlines():
         parts = line.split()
@@ -98,10 +113,16 @@ def commits_since(repo, since_epoch):
             continue
         h, ct = parts[0], parts[1]
         try:
-            if int(ct) > int(since_epoch):
-                result.append(h)
+            cti = int(ct)
         except ValueError:
             continue
+        if baseline_set:
+            # new commit = not part of the baseline history, made at/after the start second.
+            if h not in baseline_set and cti >= int(since_epoch):
+                result.append(h)
+        else:
+            if cti > int(since_epoch):
+                result.append(h)
     return result
 
 

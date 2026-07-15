@@ -127,7 +127,7 @@ def test_supervise_spares_cyclic_worker_that_is_progressing(monkeypatch):
     files on disk is spared by the external post-condition check, not killed."""
     st = _state_with_worker()
     closed = []
-    monkeypatch.setattr(watchdog, "external_progress", lambda p, since_epoch=None: True)
+    monkeypatch.setattr(watchdog, "external_progress", lambda p, since_epoch=None, baseline_rev=None: True)
     from orc import spawn as spawnmod
     monkeypatch.setattr(spawnmod, "close_worker",
                         lambda cfg, tab, session=None: closed.append(tab))
@@ -302,7 +302,7 @@ def _state_with_worker(task="t1", project="/p", restarts=0):
 def test_supervise_spares_worker_that_is_progressing(monkeypatch):
     st = _state_with_worker()
     closed = []
-    monkeypatch.setattr(watchdog, "external_progress", lambda p, since_epoch=None: True)
+    monkeypatch.setattr(watchdog, "external_progress", lambda p, since_epoch=None, baseline_rev=None: True)
     from orc import spawn as spawnmod
     monkeypatch.setattr(spawnmod, "close_worker",
                         lambda cfg, tab, session=None: closed.append(tab))

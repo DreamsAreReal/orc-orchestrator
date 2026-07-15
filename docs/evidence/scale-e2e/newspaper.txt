@@ -1,0 +1,24 @@
+смена: 6 готово, 2 ждут тебя, 0 упало; потрачено ~2.4M токенов за смену
+СМЕНА orc
+
+── ждут твоего решения ──
+  ⏸ orc-scale-home_CBp2yx-k12 — scale two gate signoff
+     скоуп:      release scope
+     планка:     operator approves
+     полномочия: —
+     цена ошибки: wrong thing shipped
+     ТЗ: /Users/admin/Desktop/orc-scale-2/do…sks/scale-two-gate-signoff/brief.md
+  ⏸ orc-scale-home_CBp2yx-onj — scale one gate review
+     скоуп:      release scope
+     планка:     operator approves
+     полномочия: —
+     цена ошибки: wrong thing shipped
+     ТЗ: /Users/admin/Desktop/orc-scale-1/do…asks/scale-one-gate-review/brief.md
+
+── завершено ──
+  ✓ orc-scale-home_CBp2yx-mdg  готово  ~187047 ток.
+  ✓ orc-scale-home_CBp2yx-sp2  готово  ~840573 ток.
+  ✓ orc-scale-home_CBp2yx-je8  готово  ~29926 ток.
+  ✓ orc-scale-home_CBp2yx-36c  готово  ~1074043 ток.
+  ✓ orc-scale-home_CBp2yx-mn1  готово  ~19347 ток.
+  ✓ orc-scale-home_CBp2yx-1nr  готово  ~274980 ток.

@@ -78,6 +78,36 @@ def test_add_worker_dedupes_task(isolated_home):
     assert len([w for w in st["workers"] if w["task"] == "t1"]) == 1
 
 
+def test_terminal_records_carry_activity_interval(isolated_home):
+    """done/parked/failed records carry the worker's [started_epoch, ended_epoch] so
+    per-project serialization is auditable straight from shift.json (F4/G3, P2/3)."""
+    st = shiftmod.load()
+    # two tasks of the SAME project, run one after the other (mutex serialized).
+    shiftmod.add_worker(st, pid=1, session="s1", project="/p", task="t1")
+    w1_start = [w for w in st["workers"] if w["task"] == "t1"][0]["started_epoch"]
+    assert w1_start is not None
+    shiftmod.mark_done(st, "t1")
+    d1 = st["done"][0]
+    # interval fields present and sane on the done record.
+    assert d1["started_epoch"] == w1_start
+    assert d1["ended_epoch"] is not None
+    assert d1["ended_epoch"] >= d1["started_epoch"]
+
+    # second task of the same project starts AFTER the first ended (serial).
+    shiftmod.add_worker(st, pid=2, session="s2", project="/p", task="t2")
+    w2_start = [w for w in st["workers"] if w["task"] == "t2"][0]["started_epoch"]
+    assert w2_start >= d1["ended_epoch"]  # non-overlap: t2 started at/after t1 ended
+    shiftmod.mark_parked(st, "t2", "waiting on gate")
+    p1 = st["parked"][0]
+    assert p1["started_epoch"] == w2_start and p1["ended_epoch"] is not None
+
+    # failed record carries the interval too.
+    shiftmod.add_worker(st, pid=3, session="s3", project="/q", task="t3")
+    shiftmod.mark_failed(st, "t3", "boom")
+    f1 = st["failed"][0]
+    assert f1["started_epoch"] is not None and f1["ended_epoch"] is not None
+
+
 # --------------------------------------------------------------------------- #
 # dispatcher: ordering (gate tasks to the end) + project-mutex
 # --------------------------------------------------------------------------- #

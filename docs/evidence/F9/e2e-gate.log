@@ -1,55 +1,55 @@
 === F9 gate protocol (real spawn + real notification) ===
-date: Wed Jul 15 15:42:30 +04 2026
-project: /tmp/orc-f9-proj.eRWtiV
+date: Wed Jul 15 19:39:56 +04 2026
+project: /tmp/orc-f9-proj.ZQRQoB
 
-orc hub initialized at /tmp/orc-f9-home.EXPEll (beads queue ready inside .beads/)
+orc hub initialized at /tmp/orc-f9-home.UhAi01 (beads queue ready inside .beads/)
 --- add gate task with a decision card ---
-added task orc-f9-home_EXPEll-5na -> /tmp/orc-f9-proj.eRWtiV
-task id: orc-f9-home_EXPEll-5na  slug: approve-the-release-scope-before-shipping
+added task orc-f9-home_UhAi01-bxx -> /tmp/orc-f9-proj.ZQRQoB
+task id: orc-f9-home_UhAi01-bxx  slug: approve-the-release-scope-before-shipping
 
 --- orc start (REAL spawn; seam worker writes a gate STATE.md, then waits) ---
 === canary preflight ===
-[ ok ] bd: bd on PATH, queue at /tmp/orc-f9-home.EXPEll/.beads
+[ ok ] bd: bd on PATH, queue at /tmp/orc-f9-home.UhAi01/.beads
 [ ok ] auth: loggedIn via /opt/homebrew/bin/claude
-[ ok ] ccusage: window active, 77 min remaining
+[WARN] ccusage: window active, 140 min remaining
 [ ok ] notify: osascript available
-[ ok ] ram: 3765 MB free (>= 400)
+[ ok ] ram: 2237 MB free (>= 400)
 canary: all preflight checks passed; shift starting
-spawned worker for orc-f9-home_EXPEll-5na in /tmp/orc-f9-proj.eRWtiV (Terminal window id 5703)
-worker handle (tab_id): 5703  tty: /dev/ttys004
+spawned worker for orc-f9-home_UhAi01-bxx in /tmp/orc-f9-proj.ZQRQoB (Terminal window id 7033)
+worker handle (tab_id): 7033  tty: /dev/ttys010
 
 --- orc status: detect gate -> park + notify + keep window ---
 real osascript notification exit: 0
 NOTIFY-LIVE PASS: real macOS notification delivered (osascript rc=0).
-смена: 0 готово, 1 ждут тебя, 0 упало; съедено 74% окна
+смена: 0 готово, 1 ждут тебя, 0 упало; потрачено ~112k токенов за смену
 СМЕНА orc
 
 ── ждут твоего решения ──
-  ⏸ orc-f9-home_EXPEll-5na — Approve the release scope before shipping
+  ⏸ orc-f9-home_UhAi01-bxx — Approve the release scope before shipping
      скоуп:      publish release v2 to users
      планка:     all tests green + changelog written
      полномочия: may tag the commit; may NOT git push (operator publishes)
      цена ошибки: a bad release ships broken code to real users
-     ТЗ: /tmp/orc-f9-proj.eRWtiV/docs/tasks/approve-the-release-scope-before-shipping/brief.md
-     ⚠ необратимое действие — решается ОТДЕЛЬНО, не в батче
+     ТЗ: /tmp/orc-f9-proj.ZQRQoB/docs/tasks/…ease-scope-before-shipping/brief.md
+     ! необратимое действие — решается ОТДЕЛЬНО, не в батче
 bd task status after gate: blocked
 NOTIFY-CONTENT PASS: dispatcher composed a gate notification naming the task.
 
 --- newspaper gate card content ---
-смена: 0 готово, 1 ждут тебя, 0 упало; съедено 74% окна
+смена: 0 готово, 1 ждут тебя, 0 упало; потрачено ~232k токенов за смену
 СМЕНА orc
 
 ── ждут твоего решения ──
-  ⏸ orc-f9-home_EXPEll-5na — Approve the release scope before shipping
+  ⏸ orc-f9-home_UhAi01-bxx — Approve the release scope before shipping
      скоуп:      publish release v2 to users
      планка:     all tests green + changelog written
      полномочия: may tag the commit; may NOT git push (operator publishes)
      цена ошибки: a bad release ships broken code to real users
-     ТЗ: /tmp/orc-f9-proj.eRWtiV/docs/tasks/approve-the-release-scope-before-shipping/brief.md
-     ⚠ необратимое действие — решается ОТДЕЛЬНО, не в батче
+     ТЗ: /tmp/orc-f9-proj.ZQRQoB/docs/tasks/…ease-scope-before-shipping/brief.md
+     ! необратимое действие — решается ОТДЕЛЬНО, не в батче
 CARD PASS: scope + brief path + cost of error + irreversible marker all present.
 
-worker processes still alive on tty ttys004 (window held): 4
+worker processes still alive on tty ttys010 (window held): 4
 WINDOW-HELD PASS: the worker session waits live (slot held, not killed on gate).
 
 --- resume: STATE.md carries the next step for a fresh continuation ---
