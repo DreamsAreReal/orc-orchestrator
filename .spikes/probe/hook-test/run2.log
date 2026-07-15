@@ -1,0 +1,7 @@
+bash: no job control in this shell
+Готово! Все пять команд выполнены отдельными вызовами параллельно:
+- echo 1 → 1
+- echo 2 → 2
+- echo 3 → 3
+- echo 4 → 4
+- echo 5 → 5
