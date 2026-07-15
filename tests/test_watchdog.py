@@ -167,7 +167,8 @@ def test_supervise_spares_worker_that_is_progressing(monkeypatch):
     closed = []
     monkeypatch.setattr(watchdog, "external_progress", lambda p, since_epoch=None: True)
     from orc import spawn as spawnmod
-    monkeypatch.setattr(spawnmod, "close_window", lambda tab: closed.append(tab))
+    monkeypatch.setattr(spawnmod, "close_worker",
+                        lambda cfg, tab, session=None: closed.append(tab))
     actions = watchdog.supervise({"restart_cap": 2}, "hub", st,
                                  verdicts={"t1": watchdog.VERDICT_LOOP})
     assert actions[0]["action"] == "spared"
@@ -179,7 +180,8 @@ def test_supervise_restarts_stuck_worker_no_progress(monkeypatch):
     st = _state_with_worker(restarts=0)
     closed, reopened = [], []
     from orc import spawn as spawnmod, beads
-    monkeypatch.setattr(spawnmod, "close_window", lambda tab: closed.append(tab))
+    monkeypatch.setattr(spawnmod, "close_worker",
+                        lambda cfg, tab, session=None: closed.append(tab))
     monkeypatch.setattr(beads, "reopen", lambda hub, tid: reopened.append(tid))
     actions = watchdog.supervise(
         {"restart_cap": 2}, "hub", st,
@@ -195,7 +197,7 @@ def test_supervise_escalates_when_cap_reached(monkeypatch):
     # already at the cap -> escalate (park), do NOT restart again
     st = _state_with_worker(restarts=2)
     from orc import spawn as spawnmod, beads
-    monkeypatch.setattr(spawnmod, "close_window", lambda tab: None)
+    monkeypatch.setattr(spawnmod, "close_worker", lambda cfg, tab, session=None: None)
     monkeypatch.setattr(beads, "reopen", lambda hub, tid: None)
     monkeypatch.setattr(beads, "set_status", lambda *a, **k: None)
     actions = watchdog.supervise(

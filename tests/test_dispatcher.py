@@ -112,7 +112,7 @@ def test_record_revalidate_note_writes_state(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_mutex_refuses_second_same_project(tmp_path, monkeypatch):
     repo = _repo(str(tmp_path / "proj"))
-    cfg = {"claude_bin": "/bin/true", "mcp_allowlist": []}
+    cfg = {"claude_bin": "/bin/true", "mcp_allowlist": [], "terminal": "terminal"}
     state = shiftmod._empty()
 
     claimed = []
@@ -126,9 +126,11 @@ def test_mutex_refuses_second_same_project(tmp_path, monkeypatch):
     monkeypatch.setattr(dispatcher.probes, "free_ram_mb", lambda: 4000)
     monkeypatch.setattr(dispatcher.probes, "ccusage_window",
                         lambda: {"active": True, "remaining_minutes": 200})
-    monkeypatch.setattr(dispatcher.spawn, "spawn_terminal",
-                        lambda p, c, prompt, session=None: (spawned.append(p) or (True, "tab 1")))
-    monkeypatch.setattr(dispatcher.spawn, "worker_pids", lambda p: [99999])
+    # F15: spawn_one routes through the backend selector
+    monkeypatch.setattr(dispatcher.spawn, "spawn_worker",
+                        lambda cfg, p, c, prompt, session=None: (spawned.append(p) or (True, "tab 1")))
+    monkeypatch.setattr(dispatcher.spawn, "worker_pid",
+                        lambda cfg, p, session, handle=None: 99999)
 
     task_a = {"id": "a", "metadata": {"project": repo, "slug": "a", "text": "A"}}
     task_b = {"id": "b", "metadata": {"project": repo, "slug": "b", "text": "B"}}
@@ -188,7 +190,7 @@ def test_reconcile_keeps_live_worker(monkeypatch):
 # admission + back-pressure integration (F5): spawn_one respects the gate
 # --------------------------------------------------------------------------- #
 def _clean_task_cfg(repo):
-    return {"claude_bin": "/bin/true", "mcp_allowlist": [],
+    return {"claude_bin": "/bin/true", "mcp_allowlist": [], "terminal": "terminal",
             "min_free_ram_mb": 400, "min_window_minutes": 5}, {
         "id": "z", "metadata": {"project": repo, "slug": "z", "text": "Z"}}
 
@@ -222,8 +224,8 @@ def test_spawn_one_admits_when_ram_and_window_ok(tmp_path, monkeypatch):
     monkeypatch.setattr(dispatcher.beads, "claim", lambda hub, tid: claimed.append(tid))
     monkeypatch.setattr(dispatcher, "prepare_worker_walls", lambda cfg, p: ("x", False))
     monkeypatch.setattr(dispatcher.probes, "total_tokens_now", lambda: 0)
-    monkeypatch.setattr(dispatcher.spawn, "spawn_terminal", lambda *a, **k: (True, "42"))
-    monkeypatch.setattr(dispatcher.spawn, "worker_pids", lambda p: [12345])
+    monkeypatch.setattr(dispatcher.spawn, "spawn_worker", lambda *a, **k: (True, "42"))
+    monkeypatch.setattr(dispatcher.spawn, "worker_pid", lambda *a, **k: 12345)
     monkeypatch.setattr(dispatcher.probes, "free_ram_mb", lambda: 4000)
     monkeypatch.setattr(dispatcher.probes, "ccusage_window",
                         lambda: {"active": True, "remaining_minutes": 200})

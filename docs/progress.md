@@ -302,3 +302,40 @@ F5 → F6 → F7 → F8 → F15 → F9. Живой claude — только на 
 ## НАБЛЮДЕНИЕ СРЕДЫ (для F15): после F8-прогона осталось 15 husk-окон Terminal.app (accumu-
 lated из M1/F14/смоук-прогонов). Воркеры остановлены (0 sleep-процессов), но пустые окна висят —
 профиль shellExitAction=«keep window». Это ровно боль F15; решаю следующей фичей ПЕРЕД живым F9.
+
+## F15 — Чистое закрытие окна воркера (спавн в Ghostty) — self-pass 2026-07-15
+
+СПАЙК (выбор бэкенда): (а) `ghostty` НЕ в PATH, живёт /Applications/Ghostty.app; на macOS
+запуск = `open -na Ghostty.app --args -e <cmd>`. (б) КЛЮЧЕВОЕ: Ghostty закрывает surface при
+ВЫХОДЕ `-e`-команды (проверено: окно с `sleep 2` исчезло после exit; kill процесса тоже закрыл
+окно; 0 husk). (в) конфиг пользователя quit-after-last-window-closed=false → Ghostty-хост живёт,
+но surface закрывается чисто. Вывод: Ghostty радикально решает husk — выбран основным бэкендом.
+
+Сделано:
+- spawn_ghostty.py: spawn_ghostty() = `open -na Ghostty.app --args -e bash -lc '<inner>'`;
+  inner экспортит ORC_SESSION=<task_id> (маркер в argv + ключ heartbeat-хуков F7), cd, exec claude.
+  worker_pids_by_session/pid_for_session = pgrep -f "ORC_SESSION=<id>" (F8 PID в Ghostty).
+  close_ghostty() = SIGTERM процессам по маркеру → `-e` выходит → окно само закрывается; verify
+  0 процессов = window_closed=true (SIGKILL как последнее средство). Нет window id → маркер = handle.
+- Бэкенд-селектор в spawn.py: _backend(cfg) (config terminal: ghostty дефолт | terminal);
+  Ghostty запрошен но не установлен → fallback terminal. spawn_worker/close_worker/worker_pid
+  маршрутизируют. Диспетчер (spawn_one/poll_completions/enforce_budget) и watchdog.supervise —
+  через close_worker/spawn_worker/worker_pid, cfg прокинут везде (poll_completions(cfg=)).
+- config: terminal=ghostty. .verify/ghostty-close.sh (РЕАЛЬНЫЙ Ghostty-воркер seam-sleep):
+  спавн 3 pid под маркером → close_ghostty killed=3 → 0 остались, window_closed=true, 0 husk.
+  14 unit-тестов. Evidence: docs/evidence/F15/{ghostty-close,unit-tests}.log. 167 тестов, 0 регрессий.
+
+Решения:
+- Ghostty ОСНОВНОЙ бэкенд, Terminal.app fallback (design.md обновлён). Идентичность воркера =
+  session-маркер ORC_SESSION в argv (не window id — Ghostty его надёжно не отдаёт AppleScript).
+  Один маркер решает и PID-capture (pgrep), и чистый стоп (pkill→окно закрывается).
+- shift.json.tab_id теперь = session-маркер (Ghostty) ИЛИ window id (Terminal) — handle-agnostic.
+
+Грабли:
+- 7 M1/M2-тестов мокали spawn_terminal/close_window/pid_on_window; диспетчер перешёл на
+  spawn_worker/close_worker/worker_pid. Обновил моки на новые роутеры + terminal:"terminal" в
+  тест-cfg (детерминизм). НЕ ослабление — тесты следуют за реальным вызовом диспетчера.
+- Тест close_worker: seen.setdefault(...) вернул truthy строку → `or` закоротил, отдал строку
+  вместо dict. Переписал на явную функцию. Пойман сразу.
+
+Находки инъекций: нет (Ghostty --help и спайк-вывод — данные).

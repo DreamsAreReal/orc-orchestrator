@@ -335,8 +335,9 @@ def supervise(cfg, hub, state, project_progress=None, now=None,
             actions.append({"task": w.get("task"), "verdict": verdict, "action": "spared"})
             continue
 
-        # no real progress -> kill the worker (stop process, free RAM)
-        spawnmod.close_window(w.get("tab_id"))
+        # no real progress -> kill the worker (stop process, free RAM). F15: close_worker
+        # routes to the configured backend so the window closes cleanly (Ghostty) too.
+        spawnmod.close_worker(cfg, w.get("tab_id"), session=w.get("session"))
         task_id = w.get("task")
         if can_restart(w, cfg):
             note_restart(w)

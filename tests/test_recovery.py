@@ -157,7 +157,7 @@ def test_spawn_one_records_real_pid_via_window(tmp_path, monkeypatch):
     subprocess.run(["git", "init", "-q", repo], check=True)
     subprocess.run(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t",
                     "commit", "-q", "--allow-empty", "-m", "i"], check=True)
-    cfg = {"claude_bin": "/bin/true", "mcp_allowlist": [],
+    cfg = {"claude_bin": "/bin/true", "mcp_allowlist": [], "terminal": "terminal",
            "min_free_ram_mb": 400, "min_window_minutes": 5}
     st = shiftmod._empty()
     monkeypatch.setattr(dispatcher.beads, "claim", lambda hub, tid: True)
@@ -168,11 +168,11 @@ def test_spawn_one_records_real_pid_via_window(tmp_path, monkeypatch):
     monkeypatch.setattr(dispatcher.probes, "free_ram_mb", lambda: 4000)
     monkeypatch.setattr(dispatcher.probes, "ccusage_window",
                         lambda: {"active": True, "remaining_minutes": 200})
-    monkeypatch.setattr(dispatcher.spawn, "spawn_terminal",
-                        lambda p, c, prompt, session=None: (True, "77"))
-    # the window resolves to a real PID -> shift.json gets a real pid, never None
-    monkeypatch.setattr(dispatcher.spawn, "pid_on_window",
-                        lambda tab, retries=10, delay=0.3: 45678)
+    # F15: spawn_one routes through the backend selector; worker_pid resolves a real PID
+    monkeypatch.setattr(dispatcher.spawn, "spawn_worker",
+                        lambda cfg, p, c, prompt, session=None: (True, "77"))
+    monkeypatch.setattr(dispatcher.spawn, "worker_pid",
+                        lambda cfg, p, session, handle=None: 45678)
     task = {"id": "tp", "metadata": {"project": repo, "slug": "tp", "text": "x"}}
     ok, detail, st = dispatcher.spawn_one(cfg, "hub", st, task)
     assert ok is True

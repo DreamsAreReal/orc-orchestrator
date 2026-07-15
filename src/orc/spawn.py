@@ -18,6 +18,63 @@ def _osascript(script):
     )
 
 
+# --------------------------------------------------------------------------- #
+# Backend selector (F15): Ghostty (default, closes windows cleanly) or Terminal.
+# --------------------------------------------------------------------------- #
+# The dispatcher calls spawn_worker / close_worker; this layer routes to the configured
+# terminal backend. Ghostty is the default because it closes a worker's window on exit
+# (no husk, no confirm dialog); Terminal.app is kept as a fallback.
+def _backend(cfg):
+    backend = (cfg or {}).get("terminal", "ghostty")
+    if backend == "ghostty":
+        from . import spawn_ghostty
+        if spawn_ghostty.ghostty_available():
+            return "ghostty"
+        # Ghostty requested but not installed -> fall back to Terminal so spawns still work
+        return "terminal"
+    return "terminal"
+
+
+def spawn_worker(cfg, project, claude_bin, prompt, session):
+    """Spawn a worker in the configured terminal backend. Returns (ok, handle).
+
+    `handle` is stored in shift.json as tab_id: a Terminal window id, or (Ghostty) the
+    session marker used to find/stop the worker. close_worker understands both.
+    """
+    if _backend(cfg) == "ghostty":
+        from . import spawn_ghostty
+        return spawn_ghostty.spawn_ghostty(project, claude_bin, prompt, session)
+    return spawn_terminal(project, claude_bin, prompt, session=session)
+
+
+def close_worker(cfg, handle, session=None):
+    """Stop a worker and close its window (F14/F15). Returns {"killed","window_closed"}.
+
+    Ghostty: kill the session-marked process -> the window self-closes (clean, 0 husk).
+    Terminal: kill by tty + best-effort window close (may leave a husk on keep profiles).
+    """
+    if _backend(cfg) == "ghostty":
+        from . import spawn_ghostty
+        return spawn_ghostty.close_ghostty(session)
+    return close_window(handle)
+
+
+def worker_pid(cfg, project, session, handle=None):
+    """Capture a real worker PID in the configured backend (F8). None if not found."""
+    if _backend(cfg) == "ghostty":
+        from . import spawn_ghostty
+        pid = spawn_ghostty.pid_for_session(session)
+        if pid is not None:
+            return pid
+        # fall through to cwd matching as a backstop
+    if handle is not None:
+        pid = pid_on_window(handle)
+        if pid is not None:
+            return pid
+    pids = worker_pids(project)
+    return pids[0] if pids else None
+
+
 def build_start_command(project, claude_bin, prompt, session=None):
     """The shell line executed inside the new terminal tab.
 

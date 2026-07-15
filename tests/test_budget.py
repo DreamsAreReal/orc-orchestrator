@@ -76,8 +76,8 @@ def test_enforce_budget_parks_over_cap_worker(monkeypatch):
     closed = []
     monkeypatch.setattr(dispatcher, "_safe_block",
                         lambda hub, tid: blocked.append(tid))
-    monkeypatch.setattr(dispatcher.spawn, "close_window",
-                        lambda tab: closed.append(tab))
+    monkeypatch.setattr(dispatcher.spawn, "close_worker",
+                        lambda cfg, tab, session=None: closed.append(tab))
     monkeypatch.setattr(dispatcher.probes, "total_tokens_now", lambda: 5000)
     parked = dispatcher.enforce_budget(cfg, "hub", state)
     assert parked == [("t-big", 5000)]

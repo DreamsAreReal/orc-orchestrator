@@ -179,7 +179,7 @@ def cmd_status(args):
         # F6: park any live worker over its per-task token budget before rendering, so the
         # newspaper shows the budget parking (protecting the weekly pool).
         budget_parked = dispatcher.enforce_budget(cfg, hub, state)
-        state, transitions = dispatcher.poll_completions(state, hub)
+        state, transitions = dispatcher.poll_completions(state, hub, cfg=cfg)
         if transitions or budget_parked:
             shiftmod.save(state)
 

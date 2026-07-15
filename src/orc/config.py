@@ -45,6 +45,8 @@ DEFAULTS = {
     "task_token_cap": 0,           # 0 = unlimited (F6 overrides)
     "shift_token_cap": 0,          # 0 = unlimited (F6)
     "notify": "macos",             # notification channel (F9)
+    "terminal": "ghostty",         # F15: spawn backend -- ghostty (closes windows cleanly,
+                                   #      the user's terminal) or terminal (Terminal.app)
 }
 
 

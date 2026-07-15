@@ -91,15 +91,16 @@ def test_poll_done_closes_loop(tmp_path, monkeypatch):
     closed_win = []
     monkeypatch.setattr(dispatcher.beads, "close",
                         lambda hub, tid: closed_bd.append(tid) or True)
-    monkeypatch.setattr(dispatcher.spawn, "close_window",
-                        lambda wid: closed_win.append(wid) or True)
+    # F15: the dispatcher now closes via the backend router close_worker(cfg, handle, session)
+    monkeypatch.setattr(dispatcher.spawn, "close_worker",
+                        lambda cfg, wid, session=None: closed_win.append(wid) or True)
 
     state = _register(proj, "slug1", "t-1", "5000")
     state, tr = dispatcher.poll_completions(state, "hub")
 
     assert tr == [("t-1", "done")]
     assert closed_bd == ["t-1"]            # bd task closed
-    assert closed_win == ["5000"]          # worker's Terminal window closed by saved id
+    assert closed_win == ["5000"]          # worker's window closed by saved handle
     assert state["workers"] == []          # no longer active
     assert [d["task"] for d in state["done"]] == ["t-1"]   # shows in the newspaper
 
@@ -109,8 +110,8 @@ def test_poll_gate_parks_and_keeps_window(tmp_path, monkeypatch):
     _write_state(proj, "slug1", GATE_STATE)
     monkeypatch.setattr(dispatcher, "_worker_slug", lambda hub, tid, p: "slug1")
     closed_win = []
-    monkeypatch.setattr(dispatcher.spawn, "close_window",
-                        lambda wid: closed_win.append(wid) or True)
+    monkeypatch.setattr(dispatcher.spawn, "close_worker",
+                        lambda cfg, wid, session=None: closed_win.append(wid) or True)
     monkeypatch.setattr(dispatcher.beads, "set_status", lambda hub, tid, st: True)
 
     state = _register(proj, "slug1", "t-1", "5000")
@@ -132,7 +133,8 @@ def test_poll_bd_error_still_repairs_shift(tmp_path, monkeypatch):
     def _boom(hub, tid):
         raise dispatcher.beads.BeadsError("bd down")
     monkeypatch.setattr(dispatcher.beads, "close", _boom)
-    monkeypatch.setattr(dispatcher.spawn, "close_window", lambda wid: True)
+    monkeypatch.setattr(dispatcher.spawn, "close_worker",
+                        lambda cfg, wid, session=None: True)
 
     state = _register(proj, "slug1", "t-1", "5000")
     state, tr = dispatcher.poll_completions(state, "hub")
@@ -163,12 +165,13 @@ def test_spawn_records_window_id_not_none(tmp_path, monkeypatch):
     monkeypatch.setattr(dispatcher.probes, "free_ram_mb", lambda: 4000)
     monkeypatch.setattr(dispatcher.probes, "ccusage_window",
                         lambda: {"active": True, "remaining_minutes": 200})
-    # spawn_terminal returns the window id string as `detail`
-    monkeypatch.setattr(dispatcher.spawn, "spawn_terminal",
-                        lambda project, cbin, prompt, session=None: (True, "4242"))
-    monkeypatch.setattr(dispatcher.spawn, "worker_pids", lambda p: [])
+    # F15: spawn_one routes through the backend selector; mock spawn_worker + worker_pid
+    monkeypatch.setattr(dispatcher.spawn, "spawn_worker",
+                        lambda cfg, project, cbin, prompt, session=None: (True, "4242"))
+    monkeypatch.setattr(dispatcher.spawn, "worker_pid",
+                        lambda cfg, project, session, handle=None: 55555)
 
-    cfg = {"claude_bin": "/bin/true", "mcp_allowlist": []}
+    cfg = {"claude_bin": "/bin/true", "mcp_allowlist": [], "terminal": "terminal"}
     task = {"id": "t-1", "metadata": {"project": proj, "slug": "s", "text": "x"}}
     state = shiftmod._empty()
     ok, detail, state = dispatcher.spawn_one(cfg, "hub", state, task)

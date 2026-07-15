@@ -184,8 +184,22 @@ North Star: утром накидал ~10 задач по проектам — M
 Проверка: `bash .verify/sandbox-walls.sh` (расширенный негативный спайк) + вывод в evidence/F13/
 Статус: todo
 
+### F15 — Чистое закрытие окна воркера (спавн в Ghostty) [M2] [фикс-фича из фидбека пользователя 2026-07-15]
+Ворота: часть G1/North Star (безнадзорная чистота), UX. Опыт/ценность: живые спавны НЕ плодят husk-окна с диалогом «подтвердите закрытие» — после стопа воркера окно закрывается САМО.
+Зачем: Terminal.app при профиле shellExitAction=keep-window держит пустое husk-окно после стопа воркера (killall'ил вручную, 16 накопилось); каждый живой прогон (F9/F12) плодит новые — раздражитель, ломает безнадзорность.
+Что: спавн-бэкенд Ghostty (реальный терминал пользователя) через `open -na Ghostty.app --args -e bash -lc '<cmd>'`; воркер несёт `ORC_SESSION=<task_id>` в argv → находится/убивается по маркеру (`pgrep/pkill -f`); Ghostty закрывает surface при выходе `-e`-команды → стоп воркера = чистое закрытие окна. Бэкенд-селектор (config `terminal`: ghostty|terminal), Terminal.app — fallback. spawn_worker/close_worker/worker_pid маршрутизируют. F8-PID и F14-close идут через бэкенд.
+Приёмка:
+- [x] после стопа воркера окно Ghostty закрыто автоматически, 0 husk, 0 диалогов
+- [x] воркер находится/останавливается по session-маркеру; PID captured в Ghostty; бэкенд-fallback на Terminal если Ghostty нет
+Проверка: `bash .verify/ghostty-close.sh` + `python3 -m pytest tests/test_ghostty.py`
+Статус: self-pass
+Доказательство:
+- `bash .verify/ghostty-close.sh` → "F15 GHOSTTY-CLOSE PASS (real Ghostty worker spawned + stopped; window closed cleanly, 0 husk)", exit 0. РЕАЛЬНЫЙ Ghostty-воркер (seam sleep, не claude) спавнен (3 pid под маркером ORC_SESSION), close_ghostty killed=3 → 0 процессов остались, window_closed=true (окно само закрылось, 0 husk/0 диалог). Лог: docs/evidence/F15/ghostty-close.log
+- `python3 -m pytest tests/test_ghostty.py` → 14 passed (inner-cmd маркер/seam, find/kill by session, close→window_closed, бэкенд-селектор ghostty-default/terminal-fallback, маршрутизация spawn/close/pid). Лог: docs/evidence/F15/unit-tests.log
+- спайк (в progress.md): Ghostty `-e`-команда при выходе закрывает окно (проверено: 0 окон после exit-команды; kill процесса тоже закрывает); `quit-after-last-window-closed=false` в конфиге пользователя — Ghostty-хост живёт, husk-окна нет. 167 тестов, 0 регрессий.
+
 ---
-Майлстоуны: M1 = F1-F4 ✓verified + F14 (замыкание петли, из consumer), M2 = F5-F9 (надёжность + гейт), M3 = F10 + F13 (ops + OS-sandbox), M4 = F11-F12 (патчи конвейера + E2E).
+Майлстоуны: M1 = F1-F4 ✓verified + F14 (замыкание петли, из consumer), M2 = F5-F9 + F15 (надёжность + гейт + чистое закрытие), M3 = F10 + F13 (ops + OS-sandbox), M4 = F11-F12 (патчи конвейера + E2E).
 Золотой путь: F2 (скелет+signature), F4 (ядро), F9 (гейт-опыт).
-Порядок священен: F1 (стены-гейт) ДО F2 (первый реальный спавн).
-Фикс-фичи из eval M1: F8 (реальный PID в shift.json — G6/G10), F13 (OS-sandbox — обфускация обходит паттерн-хук).
+Порядок священен: F1 (стены-гейт) ДО F2 (первый реальный спавн); F15 (чистое закрытие) ДО живого F9 (иначе husk копятся).
+Фикс-фичи из eval M1: F8 (реальный PID в shift.json — G6/G10), F13 (OS-sandbox — обфускация обходит паттерн-хук). Фикс-фича из фидбека: F15 (Ghostty — husk-окна Terminal.app).

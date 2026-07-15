@@ -111,16 +111,17 @@ def read_task_state(project, slug):
         return None
 
 
-def poll_completions(state, hub):
+def poll_completions(state, hub, cfg=None):
     """Detect finished tasks by polling their STATE.md and close the loop (F14).
 
     For each active worker: read its task STATE.md; on a terminal status ->
-      - done: `bd close`, mark_done in shift.json, close the worker's Terminal window;
+      - done: `bd close`, mark_done in shift.json, close the worker's window (F15 backend);
       - gate: `bd` blocked (park), mark_parked (waiting-on-you), window KEPT for the
         operator to answer the live gate (F9 owns the notification).
     bd is the truth about tasks; on a bd error we still repair shift.json so the newspaper
     reflects reality. Returns (state, [(task_id, kind)]) for the transitions applied.
     """
+    cfg = cfg or {}
     transitions = []
     for w in list(state.get("workers", [])):
         task_id = w.get("task")
@@ -138,8 +139,9 @@ def poll_completions(state, hub):
             spent = task_spend(w)
             kind = done_kind(text)
             shiftmod.mark_done(state, task_id, kind=kind, spent=spent)
-            # stop the lingering worker (frees RAM) and close its window (best effort)
-            spawn.close_window(w.get("tab_id"))
+            # stop the lingering worker (frees RAM) and close its window. F15: on Ghostty
+            # the window self-closes on process exit (0 husk); on Terminal best-effort.
+            spawn.close_worker(cfg, w.get("tab_id"), session=w.get("session"))
             transitions.append((task_id, "done"))
         elif status == "gate":
             reason = S.PARK_ON_GATE
@@ -217,7 +219,7 @@ def enforce_budget(cfg, hub, state, tokens_now=None):
             reason = S.PARK_TASK_BUDGET.format(
                 spent=spent, cap=cfg.get("task_token_cap"))
             _safe_block(hub, task_id)
-            spawn.close_window(w.get("tab_id"))
+            spawn.close_worker(cfg, w.get("tab_id"), session=w.get("session"))
             shiftmod.mark_parked(state, task_id, reason)
             parked.append((task_id, spent))
     return parked
@@ -549,23 +551,21 @@ def spawn_one(cfg, hub, state, task):
     tokens_before = probes.total_tokens_now()
     # session = task_id: the worker's heartbeat hooks (F7) key their log/marker to this id
     # via ORC_SESSION, so the watchdog reads the same session the dispatcher spawned.
-    ok, detail = spawn.spawn_terminal(project, cfg["claude_bin"], prompt, session=task_id)
+    # spawn_worker routes to the configured backend (F15): Ghostty (default, clean close)
+    # or Terminal.app. `detail` is the backend handle stored as tab_id.
+    ok, detail = spawn.spawn_worker(cfg, project, cfg["claude_bin"], prompt, session=task_id)
     if not ok:
         beads.set_status(hub, task_id, "open")
         shiftmod.mark_failed(state, task_id, "spawn failed: %s" % detail)
         return False, "spawn failed: %s" % detail, state
 
-    # register worker. `detail` is the Terminal window id (spawn_terminal); we store it as
-    # tab_id so the dispatcher can close the worker's window on completion and so status no
-    # longer prints a bare `None` (consumer finding).
+    # register worker. `detail` is the backend handle (Terminal window id, or the Ghostty
+    # session marker); stored as tab_id so the dispatcher can close the worker's window on
+    # completion and so status no longer prints a bare `None` (consumer finding).
     tab_id = detail
-    # Robust PID capture (F8 fix for the eval's `pid None`): resolve the window's tty and
-    # read the process ON it (race-free), rather than relying on lsof cwd-matching right
-    # after spawn (which loses to the shell's `cd`). Fall back to cwd-matching if needed.
-    pid = spawn.pid_on_window(tab_id)
-    if pid is None:
-        pids = spawn.worker_pids(project)
-        pid = pids[0] if pids else None
+    # Robust PID capture (F8): resolve via the backend (Ghostty: pgrep the session marker;
+    # Terminal: the window tty) instead of lsof cwd-matching right after spawn.
+    pid = spawn.worker_pid(cfg, project, task_id, handle=tab_id)
     shiftmod.add_worker(state, pid=pid, session=task_id, project=project,
                         task=task_id, phase="build", tokens_before=tokens_before,
                         tab_id=tab_id)
