@@ -1,9 +1,0 @@
-=== spawn command prefix (before cd) ===
-unset ANTHROPIC_API_KEY AWS_SECRET_ACCESS_KEY GITHUB_TOKEN; export GIT_TERMINAL_PROMPT=0; export GIT_ASKPASS=/usr/bin/false; export GIT_CONFIG_NOSYSTEM=1; export GIT_SSH_COMMAND=/usr/bin/false; export GIT_SSH=/usr/bin/false; export SSH_AUTH_SOCK=''; export GIT_CONFIG_COUNT=2; export GIT_CONFIG_KEY_0=credential.helper; export GIT_CONFIG_VALUE_0=''; export GIT_CONFIG_KEY_1=core.sshCommand; export GIT_CONFIG_VALUE_1=/usr/bin/false; export ORC_SESSION=p3; cd /tmp/ws-p3
-
-=== live: execute the prefix, check the secrets are actually cleared ===
-bash: line 0: cd: /tmp/ws-p3: No such file or directory
-AK=[CLEARED] AWS=[CLEARED] GH=[CLEARED]
-grep for any leaked secret value in the above (should be none):
-bash: line 0: cd: /tmp/ws-p3: No such file or directory
-NO LEAK (secrets cleared)

@@ -1,6 +1,0 @@
-rootdir: /Users/admin/orchestrator
-collecting ... collected 1 item
-
-tests/test_recovery.py::test_stop_kills_recorded_pid_when_tty_resolution_fails PASSED [100%]
-
-============================== 1 passed in 5.18s ===============================

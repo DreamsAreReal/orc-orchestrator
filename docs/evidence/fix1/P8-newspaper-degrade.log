@@ -1,8 +1,0 @@
-cachedir: .pytest_cache
-rootdir: /Users/admin/orchestrator
-collecting ... collected 2 items
-
-tests/test_gate.py::test_gate_card_degrades_on_bd_error PASSED           [ 50%]
-tests/test_gate.py::test_newspaper_degrades_on_bd_error_not_crash PASSED [100%]
-
-============================== 2 passed in 0.02s ===============================

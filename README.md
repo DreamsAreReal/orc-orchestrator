@@ -135,7 +135,7 @@ convenient coarse choice instead of a fragile allowlist:
   local-only job you want fully isolated. A per-task `--offline` can only *tighten* to deny,
   never loosen a shift-wide `deny` back to open.
 
-Proven at the OS level (`docs/evidence/p2/network-policy/spike.sh`): under `deny` a network
+Proven at the OS level (verified with a spike): under `deny` a network
 syscall returns `EPERM` (blocked by seatbelt); under `open` it reaches the network stack.
 
 - **The sandbox is mandatory.** It is the primary wall. `allow_no_sandbox=true` removes it

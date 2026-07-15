@@ -1,2 +1,0 @@
-=== 1. doctor (system-file + line-cap self-check) ===
-doctor_exit=0

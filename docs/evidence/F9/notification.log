@@ -1,1 +1,0 @@
-display notification "orc-f9-home_QdvqwV-yd8 — Approve the release scope before shipping. Открой газету (`orc status --newspaper`)." with title "orc: задача ждёт твоего решения" subtitle "гейт: publish release v2 to users" sound name "Glass"

@@ -1,8 +1,0 @@
-=== RUN 1 (pre-fix daemon) — outcome ===
-worker PID 80796 = /opt/homebrew/bin/claude with pipeline-invoking prompt (proven)
-pipeline phases in STATE.md: 0 intake -> 1 folded -> 2 TZ/GATE (micro offered) -> 4 BUILD -> 5 VERIFY DONE
-artifacts: factorial.py (7 pytest pass), test_factorial.py — REAL, WORKING
-orc outcome: PARKED 'suspected-fake-done' at 17:49:59 because poll raced ~4s ahead of
-  the worker's file writes (17:50:03/05) and the worker never git-committed.
-external_progress re-checked AFTER files landed: True (B1 wall recognizes real deliverable).
-=> FIX APPLIED: live worker + DONE + no-fact-yet => NOT parked (re-poll); only DEAD+no-fact => fake-done park.

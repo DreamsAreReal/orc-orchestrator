@@ -1,8 +1,7 @@
 # Architecture — what, why, and the reasoning behind each decision
 
 This document is for anyone (human or AI agent) who needs to understand **why** `orc` is
-built the way it is — not just what it does. The "what" is in [README.md](README.md);
-the full build history (research → spec → design → reviews) is under [`docs/`](docs/).
+built the way it is — not just what it does. The "what" is in [README.md](README.md).
 
 ## The one-sentence goal
 
@@ -77,7 +76,7 @@ prompt content. This is why you'll see a prompt file, not an inline prompt.
 
 ### Terminal.app, not Ghostty (a spike result)
 The default terminal backend is Terminal.app because Ghostty 1.3.1's `-e` did NOT execute
-the worker command (`.spikes/probe/ghostty-exec.md`: 12+ variants, all opened an empty
+the worker command (verified with a spike: 12+ variants, all opened an empty
 window). Terminal executes reliably. The husk-window problem (empty window left after the
 worker's shell exits) is solved by setting the Terminal profile's `shellExitAction=0` via
 `orc setup` — done through `defaults`/plist (AppleScript profile-set is TCC-blocked).
@@ -104,16 +103,6 @@ system python 3.9.6, so config is JSON, not TOML. bash is used only for thin wra
 | `report.py` | the newspaper: real token spend, gate cards, fail section |
 | `gitutil.py` | non-empty-commit / real-deliverable detection (anti reward-hack) |
 | `beads.py` / `probes.py` / `notify.py` / `config.py` / `strings.py` | queue, ccusage/ram probes, macOS notify, config defaults, RU/EN strings |
-
-## Where the "why" is recorded
-
-- [`docs/brief.md`](docs/brief.md) — the approved spec (quality gates G0–G12).
-- [`docs/design.md`](docs/design.md) + [`docs/adr/`](docs/adr/) — architecture + decisions.
-- [`docs/features.md`](docs/features.md) — every feature F1–F15 with acceptance + status.
-- [`docs/reviews/`](docs/reviews/) — adversarial evaluations that found the bugs above.
-- [`docs/research/`](docs/research/) — the two research waves (speed + architecture) that
-  the whole design is grounded in.
-- [`docs/STATE.md`](docs/STATE.md) — the full build journal (phases 0–5, every decision).
 
 ## Tests
 

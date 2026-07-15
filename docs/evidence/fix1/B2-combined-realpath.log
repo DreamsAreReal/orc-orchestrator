@@ -1,3 +1,0 @@
-=== B2 combined real-path: env-prefix + sandbox + attacker GIT_SSH_COMMAND override ===
-Result: git@github.com: Permission denied (publickey) -> fatal: Could not read from remote repository.
-WALL HELD: ~/.ssh unreadable under sandbox, so no key offered even if attacker re-enables ssh transport.

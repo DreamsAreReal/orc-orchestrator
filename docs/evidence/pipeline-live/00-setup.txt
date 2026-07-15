@@ -1,7 +1,0 @@
-=== G1 live pipeline run — setup proof ===
-date: 2026-07-15T13:45:38Z
-ORC_HOME=/Users/admin/Desktop/orc-pipeline-demo-hub
-demo project: ~/Desktop/orc-pipeline-demo
-seam vars: RAW=[] OVERRIDE=[] PROMPT_DIR=[] PROMPT_OVERRIDE=[]
-=== ccusage active window at start ===
-remainingMinutes(projection): 254 costUSD: 29.8 totalTokens: 35537168

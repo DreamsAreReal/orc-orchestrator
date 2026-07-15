@@ -1,4 +1,0 @@
-[OK] sandbox=False: multiline prompt round-trips byte-exact, single-line launch, 0 continuation
-[OK] sandbox=True: multiline prompt round-trips byte-exact, single-line launch, 0 continuation
-
-=== done (rc=0) ===

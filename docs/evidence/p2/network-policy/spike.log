@@ -1,8 +1,0 @@
-=== policy OPEN (network permitted) ===
-  result: NET_OK_REACHED_STACK
-=== policy DENY (network cut) ===
-  result: NET_BLOCKED_EPERM
-=== assertions ===
-  [ok] OPEN: network syscalls permitted (reached the stack)
-  [ok] DENY: network cut at the OS level -> NET_BLOCKED_EPERM
-P2 NETWORK-POLICY PASS

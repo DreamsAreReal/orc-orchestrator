@@ -1,9 +1,0 @@
-=== 4b. LIVE hook glob (exact lines from installed pipeline-hooks.py) ===
-107:    states = (_g.glob("docs/STATE.md") + _g.glob("docs/pipeline/STATE.md")
-108:              + _g.glob("*/docs/STATE.md") + _g.glob("*/docs/pipeline/STATE.md")
-109:              + _g.glob("docs/tasks/*/STATE.md") + _g.glob("*/docs/tasks/*/STATE.md"))
-147:    states = (_g.glob("docs/STATE.md") + _g.glob("docs/pipeline/STATE.md")
-148:              + _g.glob("*/docs/STATE.md") + _g.glob("*/docs/pipeline/STATE.md")
-149:              + _g.glob("docs/tasks/*/STATE.md") + _g.glob("*/docs/tasks/*/STATE.md"))
-layout=standard LIVE-hook-detects -> 1 globs=['docs/STATE.md', 'docs/pipeline/STATE.md', '*/docs/STATE.md', '*/docs/pipeline/STATE.md', 'docs/tasks/*/STATE.md', '*/docs/tasks/*/STATE.md'] ['docs/STATE.md']
-layout=tasks LIVE-hook-detects -> 1 globs=['docs/STATE.md', 'docs/pipeline/STATE.md', '*/docs/STATE.md', '*/docs/pipeline/STATE.md', 'docs/tasks/*/STATE.md', '*/docs/tasks/*/STATE.md'] ['docs/tasks/add-widget/STATE.md']
