@@ -115,5 +115,25 @@ def reset(state=None):
     return _empty()
 
 
+def is_finished(state):
+    """True if a shift was started but is fully drained (no live workers, no pending gates).
+
+    A drained shift is stale: keeping its `started` marker + old `done` entries makes the
+    live status hide a freshly added queue (consumer-1: the second shift of the day is
+    invisible behind the previous shift's completed newspaper). When this is True, the
+    operator's next `orc status` should show the fresh ready queue, not the old newspaper.
+
+    A shift with parked gates is NOT finished: a gate waits live for the operator, so its
+    session/window is still meaningful and must stay on the status.
+    """
+    if not state.get("started"):
+        return False
+    if state.get("workers"):
+        return False
+    if state.get("parked"):
+        return False
+    return True
+
+
 def _now_iso():
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())

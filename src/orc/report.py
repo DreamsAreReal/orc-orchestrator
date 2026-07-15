@@ -162,9 +162,12 @@ def newspaper(state, hub, window=None):
         lines.append("")
 
     if done:
+        # window total lets _done_row suppress an implausible per-task figure that is really
+        # the global ccusage counter (consumer-1 #4). None when ccusage is unavailable.
+        window_total = window.get("total_tokens") if window else None
         lines.append(S.RU_SECTION_DONE)
         for d in done:
-            lines.append(_done_row(d))
+            lines.append(_done_row(d, window_total=window_total))
         lines.append("")
 
     if failed:
@@ -174,24 +177,67 @@ def newspaper(state, hub, window=None):
     return "\n".join(lines).rstrip()
 
 
-def _spend_suffix(entry):
-    """Render the per-task spend suffix (F6), empty when spend is unknown."""
+def _spend_suffix(entry, window_total=None):
+    """Render the PER-TASK spend suffix (F6), empty when spend is unknown or implausible.
+
+    consumer-1 #4: the newspaper once showed a per-task figure of ~81M tokens — that is the
+    GLOBAL ccusage window counter, not one task's spend (it leaked in via a recovered worker
+    with no captured baseline). A real per-task delta can never exceed the whole active-window
+    total, so if the recorded `spent` is >= the window total we treat it as a mis-recorded
+    global and SUPPRESS it rather than print an alarming number. The reliable per-task delta
+    (tokens_now - tokens_before) still renders normally.
+    """
     spent = entry.get("spent")
     if spent is None:
         return ""
+    if window_total is not None:
+        try:
+            if int(spent) >= int(window_total):
+                return ""
+        except (TypeError, ValueError):
+            return ""
     return S.RU_SPEND_SUFFIX.format(spent=spent)
 
 
-def _done_row(entry):
+def _done_row(entry, window_total=None):
     """Render a completed-task row differentiating DONE / DONE-WAVE-N / BETA (F6)."""
     task_id = entry.get("task")
-    spend = _spend_suffix(entry)
+    spend = _spend_suffix(entry, window_total=window_total)
     kind = entry.get("kind", "done")
     if kind == "beta":
         return S.RU_ROW_BETA.format(id=task_id, spend=spend)
     if kind == "wave":
         return S.RU_ROW_DONE_WAVE.format(id=task_id, spend=spend)
     return S.RU_ROW_DONE.format(id=task_id, spend=spend)
+
+
+def _truncate_path(path, max_len):
+    """Shorten a path to <= max_len chars by eliding the MIDDLE with an ellipsis (E2).
+
+    The gate card's brief-path line must respect the <=80-col taste-passport budget. A long
+    project path (e.g. /Users/x/projects/<proj>/docs/tasks/<slug>/brief.md) easily exceeds it.
+    Middle-elision keeps the informative head (which project) and tail (which file) visible,
+    which matters more than the middle dirs. Measured in characters (not bytes).
+    """
+    if path is None:
+        return "—"
+    if len(path) <= max_len:
+        return path
+    if max_len <= 1:
+        return "…"
+    keep = max_len - 1  # room for the single ellipsis char
+    head = (keep + 1) // 2
+    tail = keep - head
+    if tail <= 0:
+        return path[:head] + "…"
+    return path[:head] + "…" + path[-tail:]
+
+
+# The gate card's brief-path line is rendered as "     <label>: <path>" — 5 leading spaces
+# plus a 2-char label plus ": " (4). Budget the path so the whole line stays within the
+# 80-column taste-passport width. Prefix width = 5 + 2 + 2 = 9 (measured in characters).
+_GATE_TZ_PREFIX = 9
+_GATE_LINE_MAX = 80
 
 
 def _gate_card(hub, parked_entry):
@@ -229,6 +275,8 @@ def _gate_card(hub, parked_entry):
         proj = meta.get("project")
         if proj and slug:
             brief_path = "%s/docs/tasks/%s/brief.md" % (proj, slug)
+    # Keep the brief-path line within the 80-col budget (E2): elide the path middle if needed.
+    brief_path = _truncate_path(brief_path, _GATE_LINE_MAX - _GATE_TZ_PREFIX)
     return S.RU_GATE_CARD.format(
         id=task_id, title=title, scope=scope, bar=bar,
         authority=authority, cost=cost, brief_path=brief_path,

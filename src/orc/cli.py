@@ -219,6 +219,20 @@ def cmd_status(args):
         if transitions or budget_parked:
             shiftmod.save(state)
 
+    # Auto-detect a finished (drained) shift so the fresh queue is visible again
+    # (consumer-1: a stale shift.json — started + old done — hid a freshly added queue behind
+    # the previous shift's newspaper). When the previous shift is fully drained (no live
+    # workers, no pending gates) AND new ready tasks are waiting, reset the shift so the next
+    # status shows the new queue instead of the old newspaper. Gates preserved (not drained).
+    if hub_ready and shiftmod.is_finished(state):
+        try:
+            pending = dispatcher.order_ready(beads.ready(hub))
+        except beads.BeadsError:
+            pending = []
+        if pending:
+            state = shiftmod.reset()
+            shiftmod.save(state)
+
     # The ready queue (tasks added but not yet started) — shown when no shift is running.
     ready_tasks = []
     if hub_ready and not state.get("started") and not state.get("workers"):
@@ -335,6 +349,33 @@ def cmd_stop(args):
         print(S.STOP_DONE.format(n=len(workers), secs=secs))
         for tid in requeued:
             print(S.STOP_TASK_REQUEUED.format(task=tid))
+    return 0
+
+
+def cmd_new_shift(args):
+    """Clear the previous shift's runtime state so the fresh queue is visible (consumer-1).
+
+    A stale shift.json (started + old done) hides a newly added queue behind the previous
+    shift's newspaper. `orc new-shift` resets shift.json (like the auto-detect, but explicit
+    and unconditional) so `orc status` shows the ready queue again. Only PROCESS state is
+    cleared; bd tasks are untouched (nothing is lost). Refuses while workers are live so the
+    operator does not orphan running sessions -- run `orc stop` first.
+    """
+    hub = config.hub_dir()
+    if not os.path.isdir(os.path.join(hub, ".beads")):
+        print(S.ERR_HUB_MISSING, file=sys.stderr)
+        return 1
+    state = shiftmod.load()
+    if state.get("workers"):
+        print(S.NEW_SHIFT_WORKERS_LIVE, file=sys.stderr)
+        if args.json:
+            print(json.dumps({"reset": False, "reason": "workers-live"}))
+        return 1
+    shiftmod.save(shiftmod.reset())
+    if args.json:
+        print(json.dumps({"reset": True}))
+    else:
+        print(S.NEW_SHIFT_DONE)
     return 0
 
 
@@ -505,6 +546,13 @@ def build_parser():
     pstop.add_argument("--json", action="store_true")
     pstop.set_defaults(func=cmd_stop)
 
+    # consumer-1: clear a stale shift so the fresh queue is visible again
+    pns = sub.add_parser(
+        "new-shift",
+        help="clear the previous shift's state so a freshly added queue is visible again")
+    pns.add_argument("--json", action="store_true")
+    pns.set_defaults(func=cmd_new_shift)
+
     # F10: dispatcher loop (run by the LaunchAgent)
     pd = sub.add_parser("daemon", help="run the dispatcher loop (used by the LaunchAgent)")
     pd.add_argument("--once", action="store_true", help="run a single dispatch tick and exit")
@@ -530,8 +578,10 @@ def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "cmd", None):
+        # `orc` with no args prints help and exits 0 (like `orc --help`): showing usage is a
+        # successful, expected outcome, not an error (E2 / reference-CLI convention).
         parser.print_help()
-        return 1
+        return 0
     return args.func(args)
 
 
