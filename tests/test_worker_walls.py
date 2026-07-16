@@ -40,7 +40,7 @@ def test_git_non_push_allowed(cmd):
 def test_rm_outside_workspace_blocked(tmp_path):
     ws = str(tmp_path / "ws")
     os.makedirs(ws)
-    reason = W._inspect_bash("rm -rf /Users/admin/Desktop/other", ws)
+    reason = W._inspect_bash("rm -rf /Users/someone/Desktop/other", ws)
     assert reason is not None and "workspace" in reason
 
 
@@ -204,7 +204,7 @@ def test_generate_merge_idempotent():
 def test_env_strip_removes_secrets():
     base = {
         "MY_API_KEY": "x", "GITHUB_TOKEN": "y", "AWS_SECRET_ACCESS_KEY": "z",
-        "SOME_PASSWORD": "p", "PATH": "/bin", "HOME": "/Users/admin", "LANG": "en",
+        "SOME_PASSWORD": "p", "PATH": "/bin", "HOME": "/Users/someone", "LANG": "en",
     }
     env, removed = W.stripped_env(base_env=base)
     assert "MY_API_KEY" in removed
